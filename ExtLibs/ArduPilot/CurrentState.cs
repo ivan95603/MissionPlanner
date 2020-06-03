@@ -27,7 +27,8 @@ namespace MissionPlanner
         public static float multiplieralt = 1;
         public static string AltUnit = "";
 
-        private static PointLatLngAlt _homelocation = new PointLatLngAlt();
+        private PointLatLngAlt _homelocation = new PointLatLngAlt();
+        private static PointLatLngAlt _plannedhomelocation = new PointLatLngAlt();
 
         private static PointLatLngAlt _trackerloc = new PointLatLngAlt();
 
@@ -1162,7 +1163,17 @@ namespace MissionPlanner
         public PointLatLngAlt HomeLocation
         {
             get => _homelocation;
-            set => _homelocation = value;
+            set
+            {
+                _homelocation = value;
+            }
+        }
+
+        [GroupText("Position")]
+        public PointLatLngAlt PlannedHomeLocation
+        {
+            get => _plannedhomelocation;
+            set => _plannedhomelocation = value;
         }
 
         [GroupText("Position")]
@@ -1194,7 +1205,7 @@ namespace MissionPlanner
         [GroupText("Position")] public PointLatLngAlt Location => new PointLatLngAlt(lat, lng, altasl);
         [GroupText("Position")] public PointLatLngAlt TargetLocation { get; set; } = PointLatLngAlt.Zero;
 
-        /*
+        
         public float GeoFenceDist
         {
             get
@@ -1202,63 +1213,78 @@ namespace MissionPlanner
                 try
                 {
                     float disttotal = 99999;
-                    PointLatLngAlt lineStartLatLngAlt = null;
                     var R = 6371e3;
-                    // close loop
-                    var list = parent.parent.MAV.fencepoints.ToList();
-                    if (list.Count > 0)
-                    {
-                        // remove return location
-                        list.RemoveAt(0);
-                    }
 
-                    // check all segments
-                    foreach (var mavlinkFencePointT in list)
-                    {
-                        if (lineStartLatLngAlt == null)
+                    var list = parent.parent.MAV.fencepoints
+                        .Where(a => a.Value.command != (ushort) MAVLink.MAV_CMD.FENCE_RETURN_POINT)
+                        .ChunkByField((a, b, count) =>
                         {
-                            lineStartLatLngAlt = new PointLatLngAlt(mavlinkFencePointT.Value.lat,
-                                mavlinkFencePointT.Value.lng);
-                            continue;
-                        }
+                            // these fields types stand alone
+                            if (a.Value.command == (ushort) MAVLink.MAV_CMD.FENCE_CIRCLE_EXCLUSION ||
+                                a.Value.command == (ushort) MAVLink.MAV_CMD.FENCE_CIRCLE_INCLUSION)
+                                return false;
 
-                        // crosstrack distance
-                        var lineEndLatLngAlt = new PointLatLngAlt(mavlinkFencePointT.Value.lat, mavlinkFencePointT.Value.lng);
+                            if (count > b.Value.param1)
+                                return false;
 
-                        var lineDist = lineStartLatLngAlt.GetDistance2(lineEndLatLngAlt);
-
-                        var distToLocation = lineStartLatLngAlt.GetDistance2(Location);
-                        var bearToLocation = lineStartLatLngAlt.GetBearing(Location);
-                        var lineBear = lineStartLatLngAlt.GetBearing(lineEndLatLngAlt);
-
-                        var angle = bearToLocation - lineBear;
-                        if (angle < 0)
-                            angle += 360;
-
-                        var alongline = Math.Cos(angle * MathHelper.deg2rad) * distToLocation;
-
-                        // check to see if our point is still within the line length
-                        if (alongline > lineDist)
+                            return a.Value.command == b.Value.command;
+                        });
+                    
+                    // check all sublists
+                    foreach (var sublist in list)
+                    {
+                        PointLatLngAlt lineStartLatLngAlt = null;
+                        // check all segments
+                        foreach (var mavlinkFencePointT in sublist.CloseLoop())
                         {
+                            if (lineStartLatLngAlt == null)
+                            {
+                                lineStartLatLngAlt = new PointLatLngAlt(mavlinkFencePointT.Value.x / 1e7,
+                                    mavlinkFencePointT.Value.y / 1e7);
+                                continue;
+                            }
+
+                            // crosstrack distance
+                            var lineEndLatLngAlt = new PointLatLngAlt(mavlinkFencePointT.Value.x / 1e7,
+                                mavlinkFencePointT.Value.y / 1e7);
+
+                            var lineDist = lineStartLatLngAlt.GetDistance2(lineEndLatLngAlt);
+
+                            var distToLocation = lineStartLatLngAlt.GetDistance2(Location);
+                            var bearToLocation = lineStartLatLngAlt.GetBearing(Location);
+                            var lineBear = lineStartLatLngAlt.GetBearing(lineEndLatLngAlt);
+
+                            var angle = bearToLocation - lineBear;
+                            if (angle < 0)
+                                angle += 360;
+
+                            var alongline = Math.Cos(angle * MathHelper.deg2rad) * distToLocation;
+
+                            // check to see if our point is still within the line length
+                            if (alongline < 0 || alongline > lineDist)
+                            {
+                                lineStartLatLngAlt = lineEndLatLngAlt;
+                                continue;
+                            }
+
+                            var dXt2 = Math.Sin(angle * MathHelper.deg2rad) * distToLocation;
+
+                            var dXt = Math.Asin(Math.Sin(distToLocation / R) * Math.Sin(angle * MathHelper.deg2rad)) * R;
+
+                            disttotal = (float) Math.Min(disttotal, Math.Abs(dXt2));
+
                             lineStartLatLngAlt = lineEndLatLngAlt;
-                            continue;
                         }
-
-                        var dXt2 = Math.Sin(angle * MathHelper.deg2rad) * distToLocation;
-
-                        var dXt = Math.Asin(Math.Sin(distToLocation / R) * Math.Sin(angle * MathHelper.deg2rad)) * R;
-
-                        disttotal = (float)Math.Min(disttotal, Math.Abs(dXt2));
-
-                        lineStartLatLngAlt = lineEndLatLngAlt;
                     }
 
                     // check also distance from the points - because if we are outside the polygon, we may be on a corner segment
-                    foreach (var mavlinkFencePointT in list)
+                    foreach (var sublist in list)
+                    foreach (var mavlinkFencePointT in sublist)
                     {
-                        var pathpoint = new PointLatLngAlt(mavlinkFencePointT.Value.lat, mavlinkFencePointT.Value.lng);
+                        var pathpoint = new PointLatLngAlt(mavlinkFencePointT.Value.x / 1e7,
+                            mavlinkFencePointT.Value.y / 1e7);
                         var dXt2 = pathpoint.GetDistance(Location);
-                        disttotal = (float)Math.Min(disttotal, Math.Abs(dXt2));
+                        disttotal = (float) Math.Min(disttotal, Math.Abs(dXt2));
                     }
 
                     return disttotal;
@@ -1269,7 +1295,7 @@ namespace MissionPlanner
                 }
             }
         }
-        */
+        
         [GroupText("Position")]
         [DisplayText("Dist to Home (dist)")]
         public float DistToHome
@@ -2142,8 +2168,7 @@ namespace MissionPlanner
 
                         if (errors_count1 > 0 || errors_count2 > 0)
                         {
-                            messageHigh = "InternalError " + Enum.GetName(typeof(AP_InternalError.error_t),
-                                              (errors_count1 + (errors_count2 << 16)));
+                            messageHigh = "InternalError 0x" + (errors_count1 + (errors_count2 << 16)).ToString("X");
                             messageHighTime = DateTime.Now;
                         } 
                         

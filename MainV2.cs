@@ -992,18 +992,18 @@ namespace MissionPlanner
                 try
                 {
                     if (Settings.Instance["TXT_homelat"] != null)
-                        MainV2.comPort.MAV.cs.HomeLocation.Lat = Settings.Instance.GetDouble("TXT_homelat");
+                        MainV2.comPort.MAV.cs.PlannedHomeLocation.Lat = Settings.Instance.GetDouble("TXT_homelat");
 
                     if (Settings.Instance["TXT_homelng"] != null)
-                        MainV2.comPort.MAV.cs.HomeLocation.Lng = Settings.Instance.GetDouble("TXT_homelng");
+                        MainV2.comPort.MAV.cs.PlannedHomeLocation.Lng = Settings.Instance.GetDouble("TXT_homelng");
 
                     if (Settings.Instance["TXT_homealt"] != null)
-                        MainV2.comPort.MAV.cs.HomeLocation.Alt = Settings.Instance.GetDouble("TXT_homealt");
+                        MainV2.comPort.MAV.cs.PlannedHomeLocation.Alt = Settings.Instance.GetDouble("TXT_homealt");
 
                     // remove invalid entrys
-                    if (Math.Abs(MainV2.comPort.MAV.cs.HomeLocation.Lat) > 90 ||
-                        Math.Abs(MainV2.comPort.MAV.cs.HomeLocation.Lng) > 180)
-                        MainV2.comPort.MAV.cs.HomeLocation = new PointLatLngAlt();
+                    if (Math.Abs(MainV2.comPort.MAV.cs.PlannedHomeLocation.Lat) > 90 ||
+                        Math.Abs(MainV2.comPort.MAV.cs.PlannedHomeLocation.Lng) > 180)
+                        MainV2.comPort.MAV.cs.PlannedHomeLocation = new PointLatLngAlt();
                 }
                 catch
                 {
@@ -1201,6 +1201,7 @@ namespace MissionPlanner
                     ((adsb.PointLatLngAltHdg)instance.adsbPlanes[id]).Heading = adsb.Heading;
                     ((adsb.PointLatLngAltHdg)instance.adsbPlanes[id]).Time = DateTime.Now;
                     ((adsb.PointLatLngAltHdg)instance.adsbPlanes[id]).CallSign = adsb.CallSign;
+                    ((adsb.PointLatLngAltHdg)instance.adsbPlanes[id]).Squawk = adsb.Squawk;
                     ((adsb.PointLatLngAltHdg)instance.adsbPlanes[id]).Raw = adsb.Raw;
                 }
                 else
@@ -1210,7 +1211,7 @@ namespace MissionPlanner
                         new adsb.PointLatLngAltHdg(adsb.Lat, adsb.Lng,
                                 adsb.Alt, adsb.Heading, adsb.Speed, id,
                                 DateTime.Now)
-                        { CallSign = adsb.CallSign, Raw = adsb.Raw };
+                            {CallSign = adsb.CallSign, Squawk = adsb.Squawk, Raw = adsb.Raw};
                 }
 
                 try
@@ -1224,6 +1225,7 @@ namespace MissionPlanner
                     packet.altitude = (int)(MainV2.instance.adsbPlanes[id].Alt * 1000);
                     packet.altitude_type = (byte)MAVLink.ADSB_ALTITUDE_TYPE.GEOMETRIC;
                     packet.callsign = adsb.CallSign.MakeBytes();
+                    packet.squawk = adsb.Squawk;
                     packet.emitter_type = (byte)MAVLink.ADSB_EMITTER_TYPE.NO_INFO;
                     packet.heading = (ushort)(MainV2.instance.adsbPlanes[id].Heading * 100);
                     packet.lat = (int)(MainV2.instance.adsbPlanes[id].Lat * 1e7);
@@ -1610,9 +1612,22 @@ namespace MissionPlanner
                     prd.DoWork += (IProgressReporterDialogue sender) =>
                     {
                         sender.UpdateProgressAndStatus(-1, "Checking for Param MAVFTP");
-                        var paramfile =
-                            new MAVFtp(comPort, comPort.MAV.sysid, comPort.MAV.compid).GetFile("@PARAM/param.pck",
-                                new CancellationTokenSource(2500), true, 110);
+                        var cancel = new CancellationTokenSource();
+                        var paramfileTask = Task.Run<MemoryStream>(() =>
+                            {
+                                return new MAVFtp(comPort, comPort.MAV.sysid, comPort.MAV.compid).GetFile(
+                                    "@PARAM/param.pck", cancel, false, 110);
+                            });
+                        while (!paramfileTask.IsCompleted)
+                        {
+                            if (sender.doWorkArgs.CancelRequested)
+                            {
+                                cancel.Cancel();
+                                sender.doWorkArgs.CancelAcknowledged = true;
+                            }
+                        }
+
+                        var paramfile = paramfileTask.Result;
                         if (paramfile != null && paramfile.Length > 0)
                         {
                             var mavlist = parampck.unpack(paramfile.ToArray());
@@ -1636,7 +1651,10 @@ namespace MissionPlanner
                 if (!ftpfile)
                 {
                     if (Settings.Instance.GetBoolean("Params_BG", false))
-                        comPort.getParamList(comPort.MAV.sysid, comPort.MAV.compid);
+                        Task.Run(() =>
+                        {
+                            comPort.getParamList(comPort.MAV.sysid, comPort.MAV.compid);
+                        });
                     else
                         comPort.getParamList();
                 }
@@ -3395,9 +3413,9 @@ namespace MissionPlanner
                             try
                             {
                                 nt.Open(cmds["rtk"]);
-                                nt.lat = MainV2.comPort.MAV.cs.HomeLocation.Lat;
-                                nt.lng = MainV2.comPort.MAV.cs.HomeLocation.Lng;
-                                nt.alt = MainV2.comPort.MAV.cs.HomeLocation.Alt;
+                                nt.lat = MainV2.comPort.MAV.cs.PlannedHomeLocation.Lat;
+                                nt.lng = MainV2.comPort.MAV.cs.PlannedHomeLocation.Lng;
+                                nt.alt = MainV2.comPort.MAV.cs.PlannedHomeLocation.Alt;
                                 this.BeginInvokeIfRequired(() => { inject.DoConnect(); });
                             }
                             catch (Exception ex)
@@ -3783,7 +3801,7 @@ namespace MissionPlanner
             if (keyData == (Keys.Control | Keys.Z))
             {
                 //ScanHW.Scan(comPort);
-                new Camera().test(MainV2.comPort.MAV);
+                new Camera().test(MainV2.comPort);
                 return true;
             }
             if (keyData == (Keys.Control | Keys.T)) // for override connect
