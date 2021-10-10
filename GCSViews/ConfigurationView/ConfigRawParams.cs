@@ -1,5 +1,4 @@
 ﻿using log4net;
-using Microsoft.Scripting.Utils;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System;
@@ -155,7 +154,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                         continue;
                     if (name == "FORMAT_VERSION")
                         continue;
-                    if (row.Cells[0].Value.ToString() == name)
+                    if (row.Cells[0].Value != null && row.Cells[0].Value?.ToString() == name)
                     {
                         set = true;
                         if (row.Cells[1].Value.ToString() != value)
@@ -167,7 +166,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 if (offline && !set)
                 {
                     set = true;
-                    MainV2.comPort.MAV.param.Add(new MAVLink.MAVLinkParam(name, double.Parse(value, CultureInfo.InvariantCulture),
+                    MainV2.comPort.MAV.param.Add(new MAVLink.MAVLinkParam(name, double.Parse(value),
                         MAVLink.MAV_PARAM_TYPE.REAL32));
                 }
 
@@ -232,7 +231,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 return;
 
             // sort with enable at the bottom - this ensures params are set before the function is disabled
-            var temp = _changes.Keys.Select(a => (string)a).ToList();
+            var temp = _changes.Keys.Cast<string>().ToList();
 
             temp.SortENABLE();
 
@@ -355,6 +354,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
                 processToScreen();
 
+                FilterTimerOnElapsed(null, null);
+
                 startup = false;
             }
         }
@@ -421,7 +422,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 Params[e.ColumnIndex, e.RowIndex].Style.BackColor = Color.Green;
                 log.InfoFormat("Queue change {0} = {1}", Params[Command.Index, e.RowIndex].Value, Params[e.ColumnIndex, e.RowIndex].Value);
                 _changes[Params[Command.Index, e.RowIndex].Value] =
-                    float.Parse(((string)Params[e.ColumnIndex, e.RowIndex].Value));
+                    float.Parse((((string)Params[e.ColumnIndex, e.RowIndex].Value).Replace(',','.')),CultureInfo.InvariantCulture);
             }
             catch (Exception)
             {
@@ -527,7 +528,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             Params.SortCompare += OnParamsOnSortCompare;
 
             Params.Sort(Params.Columns[Command.Index], ListSortDirection.Ascending);
-
+            
             Params.Enabled = true;
             Params.Visible = true;
             Params.ResumeLayout();
@@ -839,4 +840,5 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             cellEditValue = Params[e.ColumnIndex, e.RowIndex].Value.ToString();
         }
     }
+
 }

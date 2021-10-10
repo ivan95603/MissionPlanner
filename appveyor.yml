@@ -2,29 +2,21 @@ version: 1.0.{build}
 image: Visual Studio 2019
 configuration: Release
 clone_folder: c:\MP\
-cache:
-    - packages -> appveyor.yml
 build_script:
 - cmd: >-
-    rem git submodule update --init --recursive
+    git config -f .gitmodules submodule.mono.shallow true
+
+    git submodule update --init --depth 2 --no-single-branch 
 
     dotnet --info
 
-    c:\mp\.nuget\nuget.exe sources Add -Name "myget" -Source https://dotnet.myget.org/F/dotnet-core/api/v3/index.json
-
-    appveyor-retry c:\mp\.nuget\nuget.exe update -self
-    
-    appveyor-retry c:\mp\.nuget\nuget.exe restore
-    
     msbuild -v:m -restore /m -t:Build -p:Configuration=Release MissionPlanner.sln /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
-    
-    rem MSBuild.exe MissionPlanner.sln /m /p:Configuration=Release /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
     
     dir c:\mp\bin\Release\net461
 
     cd bin\Release\net461
-
-    for /f %%f in ('dir /a-d /b plugins') do if exist .\%%f del .\plugins\%%f
+    
+    powershell -command "ls plugins -recurse | ForEach-Object { if (Test-Path ($_.fullname -replace '\\plugins\\','\') -PathType Leaf) { $_.fullname }} | ForEach-Object { del $_ }"
 
     copy version.txt c:\mp\
     

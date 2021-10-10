@@ -1125,6 +1125,44 @@ namespace MissionPlanner.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot;?&gt;
+        ///
+        ///&lt;!-- TAGS ARE CASE SENSATIVE --&gt;
+        ///&lt;CMD&gt;
+        ///  &lt;AC2&gt;
+        ///    &lt;WAYPOINT&gt;
+        ///      &lt;P1&gt;Delay&lt;/P1&gt;
+        ///      &lt;P2&gt;&lt;/P2&gt;
+        ///      &lt;P3&gt;&lt;/P3&gt;
+        ///      &lt;P4&gt;&lt;/P4&gt;
+        ///      &lt;X&gt;Lat&lt;/X&gt;
+        ///      &lt;Y&gt;Long&lt;/Y&gt;
+        ///      &lt;Z&gt;Alt&lt;/Z&gt;
+        ///    &lt;/WAYPOINT&gt;
+        ///    &lt;SPLINE_WAYPOINT&gt;
+        ///      &lt;P1&gt;Delay&lt;/P1&gt;
+        ///      &lt;P2&gt;&lt;/P2&gt;
+        ///      &lt;P3&gt;&lt;/P3&gt;
+        ///      &lt;P4&gt;&lt;/P4&gt;
+        ///      &lt;X&gt;Lat&lt;/X&gt;
+        ///      &lt;Y&gt;Long&lt;/Y&gt;
+        ///      &lt;Z&gt;Alt&lt;/Z&gt;
+        ///    &lt;/SPLINE_WAYPOINT&gt;
+        ///    &lt;LOITER_TURNS&gt;
+        ///      &lt;P1&gt;Turns&lt;/P1&gt;
+        ///      &lt;P2&gt;&lt;/P2&gt;
+        ///      &lt;P3&gt;Radius&lt;/P3&gt;
+        ///      &lt;P4&gt;&lt;/P4&gt;
+        ///      &lt;X&gt;Lat&lt;/X&gt;
+        ///      &lt;Y&gt;Long [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string mavcmd {
+            get {
+                return ResourceManager.GetString("mavcmd", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to == MAVLink Parameters == (this is a copy fo the wiki page FYI)
         ///
         ///This is a list of all the user-modifiable MAVLink parameters and what they do. You can modify them via the MAVLink parameters window in any compatible GCS, such as the Mission Planner, HK GCS or !QGroundControl.

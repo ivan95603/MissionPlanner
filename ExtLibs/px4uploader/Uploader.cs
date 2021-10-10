@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using Org.BouncyCastle.Security;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Threading;
 using System.Xml;
 using MissionPlanner.Comms;
 
@@ -75,7 +76,7 @@ namespace px4uploader
         }
 
         public const byte BL_REV_MIN = 2;//	# minimum supported bootloader protocol 
-        public const byte BL_REV_MAX = 10;//	# maximum supported bootloader protocol
+        public const byte BL_REV_MAX = 20;//	# maximum supported bootloader protocol
         public const byte PROG_MULTI_MAX = 64;//		# protocol max is 255, must be multiple of 4
         public const byte READ_MULTI_MAX = 255;//		# protocol max is 255, something overflows with >= 64
 
@@ -448,7 +449,8 @@ namespace px4uploader
             while(port.BytesToRead == 0)
             {
                 if (DateTime.Now > deadline)
-                    throw new Exception("timeout waiting for responce");
+                    throw new TimeoutException("timeout waiting for responce");
+                Thread.Yield();
             }
 
             byte c = __recv()[0];
@@ -695,6 +697,8 @@ namespace px4uploader
                 throw new Exception("Bootloader protocol mismatch");
             }
 
+            print("Got BL Info - changing timeout");
+
             // revert to default write timeout
             port.WriteTimeout = 500;
 
@@ -702,8 +706,14 @@ namespace px4uploader
             self.board_rev = self.__getInfo(Info.BOARD_REV);
             self.fw_maxsize = self.__getInfo(Info.FLASH_SIZE);
 
-            self.chip = self.__getCHIP();
-            self.chip_desc = self.__getCHIPDES();
+            if (bl_rev >= 5)
+            {
+                try
+                {
+                    self.chip = self.__getCHIP();
+                    self.chip_desc = self.__getCHIPDES();
+                } catch {}
+            }
         }
 
         public void upload(Firmware fw)
@@ -714,7 +724,8 @@ namespace px4uploader
             if (self.board_type != fw.board_id)
             {
                 if (!(self.board_type == 33 && fw.board_id == 9))
-                    throw new Exception("Firmware not suitable for this board");
+                    throw new Exception("Firmware not suitable for this board fw:" + fw.board_id + " - board:" +
+                                        self.board_type);
             }
 
             if (self.fw_maxsize < fw.image_size && self.fw_maxsize != 0)

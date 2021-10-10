@@ -11,13 +11,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
-using MissionPlanner.Comms;
-using MissionPlanner.Controls;
-using MissionPlanner.MsgBox;
-using MissionPlanner.Radio;
-using MissionPlanner.Utilities;
-using uploader;
-using Microsoft.VisualBasic;
 
 namespace MissionPlanner.Radio
 {
@@ -192,6 +185,15 @@ S15: MAX_WINDOW=131
                 return getFirmwareLocal(device == Uploader.Board.DEVICE_ID_RFD900X);
             }
 
+            if (device == Uploader.Board.DEVICE_ID_HB1060)
+            {
+                if (beta)
+                {
+                    return Download.getFilefromNet("https://firmware.ardupilot.org/SiK/beta/radio~hb1060.ihx", firmwarefile);
+                }
+                return Download.getFilefromNet("https://firmware.ardupilot.org/SiK/stable/radio~hb1060.ihx",
+                    firmwarefile);
+            }
             if (device == Uploader.Board.DEVICE_ID_HM_TRP)
             {
                 if (beta)
@@ -936,8 +938,9 @@ S15: MAX_WINDOW=131
 
                     var freq =
                         (Uploader.Frequency)
-                            Enum.Parse(typeof(Uploader.Frequency),
-                                int.Parse(freqstring.ToLower().Replace("x", ""), style).ToString());
+                        Enum.Parse(typeof(Uploader.Frequency),
+                            int.Parse(freqstring.ToLower().Replace("x", ""), style, CultureInfo.InvariantCulture)
+                                .ToString());
 
                     ATI3.Text = freq.ToString();
 
@@ -955,7 +958,7 @@ S15: MAX_WINDOW=131
                     Session.Board =
                         (Uploader.Board)
                             Enum.Parse(typeof(Uploader.Board),
-                                int.Parse(boardstring.ToLower().Replace("x", ""), style).ToString());
+                                int.Parse(boardstring.ToLower().Replace("x", ""), style, CultureInfo.InvariantCulture).ToString());
 
                     ATI2.Text = Session.Board.ToString();
 
@@ -1008,11 +1011,11 @@ S15: MAX_WINDOW=131
                     }
                     else if (freq == Uploader.Frequency.FREQ_433)
                     {
-                        MIN_FREQ.DataSource = Range(414000, 50, 460000);
-                        RMIN_FREQ.DataSource = Range(414000, 50, 460000);
+                        MIN_FREQ.DataSource = Range(414000, 10, 460000);
+                        RMIN_FREQ.DataSource = Range(414000, 10, 460000);
 
-                        MAX_FREQ.DataSource = Range(414000, 50, 460000);
-                        RMAX_FREQ.DataSource = Range(414000, 50, 460000);
+                        MAX_FREQ.DataSource = Range(414000, 10, 460000);
+                        RMAX_FREQ.DataSource = Range(414000, 10, 460000);
                     }
                     else if (freq == Uploader.Frequency.FREQ_868)
                     {
@@ -1968,7 +1971,10 @@ red LED solid - in firmware update mode");
         {
             if (_Session != null)
             {
-                _Session.PutIntoTransparentMode();
+                try
+                {
+                    _Session.PutIntoTransparentMode();
+                } catch{}
                 _Session.Dispose();
                 _Session.Port.Close();
                 _Session = null;

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
+using MissionPlanner;
 using Xamarin.Forms;
 using Xamarin.Forms.Xaml;
 
@@ -19,6 +19,7 @@ namespace Xamarin.GCSViews
         {
             InitializeComponent();
 
+            // false so the bg is transparent
             hud1.bgon = false;
 
             // 10hz hud
@@ -49,7 +50,6 @@ namespace Xamarin.GCSViews
                     hud1.heading = MainV2.comPort.MAV.cs.yaw;
                     hud1.linkqualitygcs = MainV2.comPort.MAV.cs.linkqualitygcs;
                     hud1.message = MainV2.comPort.MAV.cs.messageHigh;
-                    hud1.messagetime = MainV2.comPort.MAV.cs.messageHighTime;
                     hud1.mode = MainV2.comPort.MAV.cs.mode;
                     hud1.navpitch = MainV2.comPort.MAV.cs.nav_pitch;
                     hud1.navroll = MainV2.comPort.MAV.cs.nav_roll;
@@ -76,6 +76,11 @@ namespace Xamarin.GCSViews
                 });
                 return true;
             });            
+        }
+
+        private void hud1_Touch(object sender, SkiaSharp.Views.Forms.SKTouchEventArgs e)
+        {
+            
         }
     }
 }

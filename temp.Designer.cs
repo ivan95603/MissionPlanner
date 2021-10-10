@@ -30,6 +30,7 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(temp));
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
+            this.BUT_CoT = new MissionPlanner.Controls.MyButton();
             this.but_proximity = new MissionPlanner.Controls.MyButton();
             this.but_followswarm = new MissionPlanner.Controls.MyButton();
             this.label16 = new System.Windows.Forms.Label();
@@ -39,7 +40,6 @@
             this.but_dem = new MissionPlanner.Controls.MyButton();
             this.BUT_magfit2 = new MissionPlanner.Controls.MyButton();
             this.but_GDAL = new MissionPlanner.Controls.MyButton();
-            this.myButton2 = new MissionPlanner.Controls.MyButton();
             this.but_sortlogs = new MissionPlanner.Controls.MyButton();
             this.but_optflowcalib = new MissionPlanner.Controls.MyButton();
             this.but_logdlscp = new MissionPlanner.Controls.MyButton();
@@ -60,7 +60,7 @@
             this.but_blupdate = new MissionPlanner.Controls.MyButton();
             this.BUT_fft = new MissionPlanner.Controls.MyButton();
             this.but_disablearmswitch = new MissionPlanner.Controls.MyButton();
-            this.but_injectgps = new MissionPlanner.Controls.MyButton();
+            this.but_paramrestore = new MissionPlanner.Controls.MyButton();
             this.but_mavinspector = new MissionPlanner.Controls.MyButton();
             this.but_sitl_comb = new MissionPlanner.Controls.MyButton();
             this.but_anonlog = new MissionPlanner.Controls.MyButton();
@@ -113,7 +113,6 @@
             this.but_mavserialport = new MissionPlanner.Controls.MyButton();
             this.but_hexmavlink = new MissionPlanner.Controls.MyButton();
             this.label27 = new System.Windows.Forms.Label();
-            this.label28 = new System.Windows.Forms.Label();
             this.label29 = new System.Windows.Forms.Label();
             this.label30 = new System.Windows.Forms.Label();
             this.label31 = new System.Windows.Forms.Label();
@@ -141,6 +140,8 @@
             this.label53 = new System.Windows.Forms.Label();
             this.label54 = new System.Windows.Forms.Label();
             this.label55 = new System.Windows.Forms.Label();
+            this.but_remotedflogger = new MissionPlanner.Controls.MyButton();
+            this.label12 = new System.Windows.Forms.Label();
             this.controlSensorsStatus1 = new MissionPlanner.Controls.ControlSensorsStatus();
             this.tableLayoutPanel1.SuspendLayout();
             this.SuspendLayout();
@@ -149,6 +150,7 @@
             // 
             this.tableLayoutPanel1.BackColor = System.Drawing.Color.Transparent;
             resources.ApplyResources(this.tableLayoutPanel1, "tableLayoutPanel1");
+            this.tableLayoutPanel1.Controls.Add(this.BUT_CoT, 0, 29);
             this.tableLayoutPanel1.Controls.Add(this.but_proximity, 2, 27);
             this.tableLayoutPanel1.Controls.Add(this.but_followswarm, 2, 28);
             this.tableLayoutPanel1.Controls.Add(this.label16, 3, 25);
@@ -158,7 +160,6 @@
             this.tableLayoutPanel1.Controls.Add(this.but_dem, 2, 11);
             this.tableLayoutPanel1.Controls.Add(this.BUT_magfit2, 0, 28);
             this.tableLayoutPanel1.Controls.Add(this.but_GDAL, 2, 14);
-            this.tableLayoutPanel1.Controls.Add(this.myButton2, 0, 27);
             this.tableLayoutPanel1.Controls.Add(this.but_sortlogs, 2, 13);
             this.tableLayoutPanel1.Controls.Add(this.but_optflowcalib, 0, 26);
             this.tableLayoutPanel1.Controls.Add(this.but_logdlscp, 2, 12);
@@ -179,7 +180,7 @@
             this.tableLayoutPanel1.Controls.Add(this.but_blupdate, 2, 5);
             this.tableLayoutPanel1.Controls.Add(this.BUT_fft, 2, 17);
             this.tableLayoutPanel1.Controls.Add(this.but_disablearmswitch, 2, 2);
-            this.tableLayoutPanel1.Controls.Add(this.but_injectgps, 2, 16);
+            this.tableLayoutPanel1.Controls.Add(this.but_paramrestore, 2, 16);
             this.tableLayoutPanel1.Controls.Add(this.but_mavinspector, 2, 4);
             this.tableLayoutPanel1.Controls.Add(this.but_sitl_comb, 2, 15);
             this.tableLayoutPanel1.Controls.Add(this.but_anonlog, 0, 11);
@@ -232,7 +233,6 @@
             this.tableLayoutPanel1.Controls.Add(this.but_mavserialport, 0, 14);
             this.tableLayoutPanel1.Controls.Add(this.but_hexmavlink, 2, 0);
             this.tableLayoutPanel1.Controls.Add(this.label27, 1, 28);
-            this.tableLayoutPanel1.Controls.Add(this.label28, 1, 27);
             this.tableLayoutPanel1.Controls.Add(this.label29, 1, 26);
             this.tableLayoutPanel1.Controls.Add(this.label30, 3, 1);
             this.tableLayoutPanel1.Controls.Add(this.label31, 3, 2);
@@ -260,7 +260,16 @@
             this.tableLayoutPanel1.Controls.Add(this.label53, 3, 26);
             this.tableLayoutPanel1.Controls.Add(this.label54, 3, 27);
             this.tableLayoutPanel1.Controls.Add(this.label55, 3, 28);
+            this.tableLayoutPanel1.Controls.Add(this.but_remotedflogger, 0, 15);
+            this.tableLayoutPanel1.Controls.Add(this.label12, 1, 29);
             this.tableLayoutPanel1.Name = "tableLayoutPanel1";
+            // 
+            // BUT_CoT
+            // 
+            resources.ApplyResources(this.BUT_CoT, "BUT_CoT");
+            this.BUT_CoT.Name = "BUT_CoT";
+            this.BUT_CoT.UseVisualStyleBackColor = true;
+            this.BUT_CoT.Click += new System.EventHandler(this.BUT_CoT_Click);
             // 
             // but_proximity
             // 
@@ -322,13 +331,6 @@
             this.but_GDAL.Name = "but_GDAL";
             this.but_GDAL.UseVisualStyleBackColor = true;
             this.but_GDAL.Click += new System.EventHandler(this.but_GDAL_Click);
-            // 
-            // myButton2
-            // 
-            resources.ApplyResources(this.myButton2, "myButton2");
-            this.myButton2.Name = "myButton2";
-            this.myButton2.UseVisualStyleBackColor = true;
-            this.myButton2.Click += new System.EventHandler(this.myButton2_Click);
             // 
             // but_sortlogs
             // 
@@ -468,12 +470,12 @@
             this.but_disablearmswitch.UseVisualStyleBackColor = true;
             this.but_disablearmswitch.Click += new System.EventHandler(this.but_disablearmswitch_Click);
             // 
-            // but_injectgps
+            // but_paramrestore
             // 
-            resources.ApplyResources(this.but_injectgps, "but_injectgps");
-            this.but_injectgps.Name = "but_injectgps";
-            this.but_injectgps.UseVisualStyleBackColor = true;
-            this.but_injectgps.Click += new System.EventHandler(this.but_injectgps_Click);
+            resources.ApplyResources(this.but_paramrestore, "but_paramrestore");
+            this.but_paramrestore.Name = "but_paramrestore";
+            this.but_paramrestore.UseVisualStyleBackColor = true;
+            this.but_paramrestore.Click += new System.EventHandler(this.but_paramrestore_Click);
             // 
             // but_mavinspector
             // 
@@ -789,11 +791,6 @@
             resources.ApplyResources(this.label27, "label27");
             this.label27.Name = "label27";
             // 
-            // label28
-            // 
-            resources.ApplyResources(this.label28, "label28");
-            this.label28.Name = "label28";
-            // 
             // label29
             // 
             resources.ApplyResources(this.label29, "label29");
@@ -929,6 +926,18 @@
             resources.ApplyResources(this.label55, "label55");
             this.label55.Name = "label55";
             // 
+            // but_remotedflogger
+            // 
+            resources.ApplyResources(this.but_remotedflogger, "but_remotedflogger");
+            this.but_remotedflogger.Name = "but_remotedflogger";
+            this.but_remotedflogger.UseVisualStyleBackColor = true;
+            this.but_remotedflogger.Click += new System.EventHandler(this.but_remotedflogger_Click);
+            // 
+            // label12
+            // 
+            resources.ApplyResources(this.label12, "label12");
+            this.label12.Name = "label12";
+            // 
             // controlSensorsStatus1
             // 
             resources.ApplyResources(this.controlSensorsStatus1, "controlSensorsStatus1");
@@ -999,7 +1008,7 @@
         private System.Windows.Forms.Label label20;
         private System.Windows.Forms.Label label19;
         private Controls.MyButton but_sitl_comb;
-        private Controls.MyButton but_injectgps;
+        private Controls.MyButton but_paramrestore;
         private Controls.MyButton BUT_fft;
         private Controls.MyButton but_reboot;
         private Controls.MyButton BUT_QNH;
@@ -1010,7 +1019,6 @@
         private Controls.MyButton myButton1;
         private Controls.MyButton but_signkey;
         private Controls.MyButton but_optflowcalib;
-        private Controls.MyButton myButton2;
         private Controls.MyButton BUT_magfit2;
         private Controls.MyButton but_gpsinj;
         private Controls.MyButton but_followswarm;
@@ -1036,7 +1044,6 @@
         private System.Windows.Forms.Label label16;
         private Controls.MyButton but_hexmavlink;
         private System.Windows.Forms.Label label27;
-        private System.Windows.Forms.Label label28;
         private System.Windows.Forms.Label label29;
         private System.Windows.Forms.Label label30;
         private System.Windows.Forms.Label label31;
@@ -1065,5 +1072,8 @@
         private System.Windows.Forms.Label label54;
         private System.Windows.Forms.Label label55;
         private Controls.ControlSensorsStatus controlSensorsStatus1;
+        private Controls.MyButton but_remotedflogger;
+        private Controls.MyButton BUT_CoT;
+        private System.Windows.Forms.Label label12;
     }
 }

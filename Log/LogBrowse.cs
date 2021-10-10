@@ -24,9 +24,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using IronPython.Runtime;
+using Microsoft.Scripting.Hosting;
+using MissionPlanner.GCSViews.ConfigurationView;
 using ZedGraph; // Graphs
 
+#if !LIB
 [assembly: ExtensionType(typeof(Dictionary<string, object>), typeof(LogBrowse.ext))]
+#endif
 
 namespace MissionPlanner.Log
 {
@@ -147,8 +152,10 @@ namespace MissionPlanner.Log
                 return this.isValid;
             }
 
-            public static string GetNodeName(string parent, string child)
+            public static string GetNodeName(string parent,int instance, string child)
             {
+                if (instance >= 0)
+                    return parent + "[" + instance + "]." + child;
                 return parent + "." + child;
             }
         }
@@ -190,6 +197,8 @@ namespace MissionPlanner.Log
             if (GCSViews.FlightData.mymap != null)
                 myGMAP1.MapProvider = GCSViews.FlightData.mymap.MapProvider;
 
+            myGMAP1.MaxZoom = 24;
+
             myGMAP1.Overlays.Add(mapoverlay);
             myGMAP1.Overlays.Add(markeroverlay);
 
@@ -216,6 +225,8 @@ namespace MissionPlanner.Log
                 logdata.Clear();
 
             GC.Collect();
+
+            myGMAP1.DisableFocusOnMouseEnter = true;
 
             ErrorCache = new List<TextObj>();
             EVCache = new List<TextObj>();
@@ -721,7 +732,7 @@ namespace MissionPlanner.Log
             // Set the titles and axis labels
             myPane.Title.Text = "Value Graph";
             myPane.XAxis.Title.Text = "Line Number";
-            myPane.YAxis.Title.Text = "Output";
+            myPane.YAxis.Title.Text = "";
 
             // Show the x axis grid
             myPane.XAxis.MajorGrid.IsVisible = true;
@@ -828,7 +839,7 @@ namespace MissionPlanner.Log
         {
             log.InfoFormat("GraphItem: {0} {1} {2}", type, fieldname, instance);
             DataModifer dataModifier = new DataModifer();
-            string nodeName = DataModifer.GetNodeName(type, fieldname);
+            string nodeName = DataModifer.GetNodeName(type, instance != "" ? int.Parse(instance) : -1, fieldname);
 
             foreach (var curve in zg1.GraphPane.CurveList)
             {
@@ -913,7 +924,7 @@ namespace MissionPlanner.Log
                 List<Tuple<DFLog.DFItem, double>> list1 = null;
                 try
                 {
-                    list1 = TestPython(dflog, logdata, type);
+                    list1 = TestPython(dflog, logdata, type.Replace(":2", ""));
                 }
                 catch (Exception ex)
                 {
@@ -930,7 +941,7 @@ namespace MissionPlanner.Log
                     else
                         newlist.Add(new PointPair(a.Item1.lineno, a.Item2));
                 });
-                GraphItem_AddCurve(newlist, type, fieldname, left, instance);
+                GraphItem_AddCurve(newlist, type, fieldname, left, instance, isexpression);
             }
         }
 
@@ -956,7 +967,7 @@ namespace MissionPlanner.Log
 
             Dictionary<string, List<string>> fieldsUsed = new Dictionary<string, List<string>>();
 
-            var fieldmatchs = Regex.Matches(expression, @"(([A-z0-9_]{2,20})\.([A-z0-9_]+))");
+            var fieldmatchs = Regex.Matches(expression, @"(([A-z0-9_]{2,20})\.([A-z0-9_]+))|([A-z0-9_]{2,20})");
 
             if (fieldmatchs.Count > 0)
             {
@@ -964,6 +975,9 @@ namespace MissionPlanner.Log
                 {
                     var type = match.Groups[2].Value.ToString();
                     var field = match.Groups[3].Value.ToString();
+
+                    if (type == "")
+                        type = match.Groups[4].Value.ToString();
 
                     if (!fieldsUsed.ContainsKey(type))
                         fieldsUsed[type] = new List<string>();
@@ -980,23 +994,104 @@ namespace MissionPlanner.Log
                     ans[fieldName] = 0;
                 }
 
-                scope.SetVariable(logformatKey, ans);
+                //scope.SetVariable(logformatKey, ans);
             }
-
-            var script = engine.CreateScriptSourceFromString("from mavextra import *;\r\n" + expression);
-
+            
             List<Tuple<DFLog.DFItem, double>> answer = new List<Tuple<DFLog.DFItem, double>>();
 
+            if (!fieldsUsed.Any(x => dflog.logformat.ContainsKey(x.Key)))
+                return answer;
 
-            foreach (var line in logdata.GetEnumeratorType(expression.Split(new char[] { '(', ')', ',', ' ', '.' },
-                StringSplitOptions.RemoveEmptyEntries)))
+            scope.SetVariable("answer", answer);
+
+            scope.SetVariable("logdata", logdata);
+
+            var exp = "[" + expression
+                .Split(new char[] {'(', ')', ',', ' ', '.', '-', '+', '*', '/'},
+                    StringSplitOptions.RemoveEmptyEntries).Where(a => dflog.logformat.Keys.Any(b => a == b))
+                .Aggregate("", (a, b) => a + ",\"" + b + "\"").TrimStart(',') + "]";
+
+            var scriptsrc = String.Format(@"
+import clr
+import sys
+import os
+import System
+clr.AddReference('MissionPlanner.Utilities')
+from MissionPlanner.Utilities import DFLog
+from math import *
+from mavextra import *
+from rotmat import *
+
+exp_as_func = eval('lambda: ' + ""{1}"")
+
+invalid = 0
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+def evaluate_expression():
+    '''evaluation an expression'''
+    global invalid
+    try:
+        v = exp_as_func()
+    except NameError as ne:
+        print ne, invalid 
+        invalid = invalid + 1
+        if invalid > 200:
+            raise ne
+        return None
+    except ZeroDivisionError:
+        print ZeroDivisionError
+        return None
+    except IndexError:
+        print IndexError
+        return None
+    return v
+
+def main():
+    vars = {{}}
+    a=0
+    for line in logdata.GetEnumeratorType(System.Array[System.String]({0})):
+        if line.instance != '' and line.instance != '0':
+            continue
+        globals()[line.msgtype] = AttrDict(line.ToDictionary())
+        v = evaluate_expression()
+        a += 1
+        if (a % 10000) == 0:
+            print a
+        if v is not None:
+            answer.Add(System.Tuple[DFLog.DFItem, float](line, v))
+
+main()
+", exp, expression.Replace("\"", "\\\""));
+
+            var script = engine.CreateScriptSourceFromString(scriptsrc);
+
+            Loading.ShowLoading("Processing via Python", this);
+
+            try
             {
-                if (expression.Contains(line.msgtype))
+                script.Execute(scope);
+            }
+            catch (Exception ex)
+            {
+                log.Error(engine.GetService<ExceptionOperations>().FormatException(ex));
+                throw;
+            }
+
+            if (false)
+            {
+                foreach (var line in logdata.GetEnumeratorType(exp))
                 {
-                    var dict = line.ToDictionary();
-                    scope.SetVariable(line.msgtype, dict);
-                    var result = script.Execute(scope);
-                    answer.Add(line, (double)result);
+                    if (expression.Contains(line.msgtype))
+                    {
+                        var dict = line.ToDictionary();
+                        scope.SetVariable(line.msgtype, dict);
+                        var result = script.Execute(scope);
+                        answer.Add(line, (double) result);
+                    }
                 }
             }
 
@@ -1146,7 +1241,7 @@ namespace MissionPlanner.Log
             return colours[zg1.GraphPane.CurveList.Count % colours.Length];
         }
 
-        void GraphItem_AddCurve(PointPairList list1, string type, string header, bool left, string instance)
+        void GraphItem_AddCurve(PointPairList list1, string type, string header, bool left, string instance, bool isexpression = false)
         {
             if (list1.Count < 1)
             {
@@ -1157,6 +1252,10 @@ namespace MissionPlanner.Log
             var ans = logdata.GetUnit(type, header);
             string unit = ans.Item1;
             double multiplier = ans.Item2;
+
+            // this is so precaned graphs draw on a singel axis
+            if (isexpression)
+                unit = "";
 
             if (unit != "")
                 header += " (" + unit + ")";
@@ -1175,7 +1274,54 @@ namespace MissionPlanner.Log
             myCurve = zg1.GraphPane.AddCurve(type + (instance != "" ? "[" + instance + "]" : "") + "." + header, list1,
                 pickColour(), SymbolType.None);
 
+            var rightclick = !left;
+
+            var index = zg1.GraphPane.YAxisList.IndexOf(unit);
+
+            var index2 = zg1.GraphPane.Y2AxisList.IndexOf(unit);
+
+            if (index != -1 && !rightclick)
+            {
+                myCurve.YAxisIndex = index;
+                myCurve.GetYAxis(zg1.GraphPane).IsVisible = true;
+            }
+            else if (index2 != -1 && rightclick)
+            {
+                myCurve.IsY2Axis = true;
+                myCurve.YAxisIndex = index2;
+                myCurve.GetYAxis(zg1.GraphPane).IsVisible = true;
+            }
+            else
+            {
+                if (rightclick)
+                {
+                    index = zg1.GraphPane.AddY2Axis(unit);
+                    myCurve.IsY2Axis = true;
+                    myCurve.YAxisIndex = index;
+                }
+                else
+                {
+                    index = zg1.GraphPane.AddYAxis(unit);
+                    myCurve.YAxisIndex = index;
+                }
+
+                // Make the Y axis scale red
+                myCurve.GetYAxis(zg1.GraphPane).Scale.FontSpec.FontColor = Color.Red;
+                myCurve.GetYAxis(zg1.GraphPane).Title.FontSpec.FontColor = Color.Red;
+                // turn off the opposite tics so the Y tics don't show up on the Y2 axis
+                myCurve.GetYAxis(zg1.GraphPane).MajorTic.IsOpposite = false;
+                myCurve.GetYAxis(zg1.GraphPane).MinorTic.IsOpposite = false;
+                // Don't display the Y zero line
+                myCurve.GetYAxis(zg1.GraphPane).MajorGrid.IsZeroLine = true;
+                // Align the Y axis labels so they are flush to the axis
+                myCurve.GetYAxis(zg1.GraphPane).Scale.Align = AlignP.Inside;
+
+                myCurve.GetYAxis(zg1.GraphPane).Title.FontSpec.Size = 10;
+            }
+
             leftorrightaxis(left, myCurve);
+
+            CleanupYAxis();
 
             // Make sure the Y axis is rescaled to accommodate actual data
             try
@@ -1194,6 +1340,36 @@ namespace MissionPlanner.Log
             // Force a redraw
             zg1.Refresh();
             Loading.Close();
+        }
+
+        private void CleanupYAxis()
+        {
+            try
+            {
+                // cleanup the displayed yaxis list
+                var ylist = zg1.GraphPane.YAxisList;
+                var y2list = zg1.GraphPane.Y2AxisList;
+                var curvelist = zg1.GraphPane.CurveList;
+
+                ylist.Where(axis =>
+                {
+                    if (curvelist.Select(a => a.GetYAxis(zg1.GraphPane)).Any(a => a == axis))
+                        return false;
+                    axis.IsVisible = false;
+                    return false;
+                }).ToList();
+
+                y2list.Where(axis =>
+                {
+                    if (curvelist.Select(a => a.GetYAxis(zg1.GraphPane)).Any(a => a == axis))
+                        return false;
+                    axis.IsVisible = false;
+                    return false;
+                }).ToList();
+            }
+            catch
+            {
+            }
         }
 
         async Task DrawErrors()
@@ -1705,7 +1881,7 @@ namespace MissionPlanner.Log
                         if (i < startline || i > endline)
                             continue;
 
-                        if (item.msgtype == "GPS")
+                        if (item.msgtype == "GPS" && (item.instance == "0" || item.instance == ""))
                         {
                             var ans = getPointLatLng(item);
 
@@ -1739,7 +1915,7 @@ namespace MissionPlanner.Log
                                 }
                             }
                         }
-                        else if (item.msgtype == "GPS2")
+                        else if (item.msgtype == "GPS2" || item.msgtype == "GPS" && item.instance == "1")
                         {
                             var ans = getPointLatLng(item);
 
@@ -1773,7 +1949,7 @@ namespace MissionPlanner.Log
                                 }
                             }
                         }
-                        else if (item.msgtype == "GPSB")
+                        else if (item.msgtype == "GPSB" || item.msgtype == "GPS" && item.instance == "2")
                         {
                             var ans = getPointLatLng(item);
 
@@ -2491,8 +2667,13 @@ namespace MissionPlanner.Log
             }
 
             string dataModifer_str = "";
-            string nodeName =
-                DataModifer.GetNodeName(treeView1.SelectedNode.Parent.Text, treeView1.SelectedNode.Text);
+            string nodeName = "";
+            if(treeView1.SelectedNode.Parent.Parent != null)
+                nodeName = DataModifer.GetNodeName(treeView1.SelectedNode.Parent.Parent.Text, int.Parse(treeView1.SelectedNode.Parent.Text), treeView1.SelectedNode.Text);
+            else 
+                nodeName = DataModifer.GetNodeName(treeView1.SelectedNode.Parent.Text, -1, treeView1.SelectedNode.Text);
+
+
 
             if (dataModifierHash.ContainsKey(nodeName))
             {
@@ -2518,22 +2699,18 @@ namespace MissionPlanner.Log
             }
         }
 
-        private void treeView1_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
+        private void treeView1_AfterCheck(object sender, TreeViewEventArgs e)
         {
+            toolTip1.Hide(treeView1);
+
             if (e.Node != null && e.Node.Parent != null)
             {
-                // set the check if we right click
-                if (e.Button == System.Windows.Forms.MouseButtons.Right)
-                {
-                    e.Node.Checked = !e.Node.Checked;
-                }
-
                 var nodepath = e.Node.FullPath;
                 var parts = nodepath.Split('\\');
 
                 if (e.Node.Checked)
                 {
-                    if (e.Button == System.Windows.Forms.MouseButtons.Right)
+                    if (wasrightclick)
                     {
                         if (parts.Length == 3)
                             GraphItem(parts[0], parts[2], false, true, false, parts[1]);
@@ -2570,6 +2747,7 @@ namespace MissionPlanner.Log
                         zg1.GraphPane.CurveList.Remove(item);
                 }
 
+                CleanupYAxis();
                 zg1.AxisChange();
                 zg1.Invalidate();
             }
@@ -2594,7 +2772,7 @@ namespace MissionPlanner.Log
                     }
                     else
                     {
-                        GraphItem(item.type, item.field, item.left, false);
+                        GraphItem(item.type + "." + item.field, "", item.left, false, true);
                     }
                 }
                 catch
@@ -2989,7 +3167,7 @@ namespace MissionPlanner.Log
                 zg1.GraphPane.XAxis.Title.Text = "Time (sec)";
                 zg1.GraphPane.XAxis.Scale.MajorUnit = DateUnit.Minute;
                 zg1.GraphPane.XAxis.Scale.MinorUnit = DateUnit.Second;
-                zg1.GraphPane.YAxis.Title.Text = "Output";
+                zg1.GraphPane.YAxis.Title.Text = "";
                 zg1.PointDateFormat = "HH:mm:ss.fff";
             }
             else
@@ -2997,11 +3175,13 @@ namespace MissionPlanner.Log
                 // Set the titles and axis labels
                 zg1.GraphPane.XAxis.Type = AxisType.Linear;
                 zg1.GraphPane.XAxis.Scale.Format = "f0";
+                zg1.GraphPane.XAxis.Scale.MagAuto = false;
                 zg1.GraphPane.Title.Text = "Value Graph";
                 zg1.GraphPane.XAxis.Title.Text = "Line Number";
-                zg1.GraphPane.YAxis.Title.Text = "Output";
+                zg1.GraphPane.YAxis.Title.Text = "";
             }
 
+            CleanupYAxis();
             zg1.AxisChange();
             zg1.Invalidate();
         }
@@ -3160,6 +3340,7 @@ namespace MissionPlanner.Log
 
         bool mousedown = false;
         private PointLatLng MouseDownStart;
+        private bool wasrightclick;
 
         private void myGMAP1_MouseDown(object sender, MouseEventArgs e)
         {
@@ -3202,6 +3383,64 @@ namespace MissionPlanner.Log
         private void chk_events_CheckedChanged(object sender, EventArgs e)
         {
             zg1_ZoomEvent(zg1, null, null);
+        }
+
+        private void treeView1_TreeNodeMouseHover(object sender, TreeNodeMouseHoverEventArgs e)
+        {
+            var pos = treeView1.PointToClient(Control.MousePosition);
+            var node = treeView1.GetNodeAt(pos);
+            if (node != null)
+            {
+                var items = node.FullPath.Split('\\');
+                if (items.Length >= 2 && LogMetaData.MetaData.ContainsKey(items[0]) &&
+                    LogMetaData.MetaData[items[0]].ContainsKey(items[items.Length - 1]))
+                {
+                    var desc = LogMetaData.MetaData[items[0]][items[items.Length - 1]];
+                    pos.Y -= 30;
+                    pos.X += 30;
+                    txt_info.Text = desc;
+                    //toolTip1.Show(desc, treeView1, pos, 2000);
+                } else if (items.Length == 1 && LogMetaData.MetaData.ContainsKey(items[0]) &&
+                           LogMetaData.MetaData[items[0]].ContainsKey("description"))
+                {
+                    var desc = LogMetaData.MetaData[items[0]]["description"];
+                    pos.Y -= 30;
+                    pos.X += 30;
+                    txt_info.Text = desc;
+                    //toolTip1.Show(desc, treeView1, pos, 2000);
+                }
+            }
+        }
+
+        private void chk_params_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chk_params.Checked == false)
+                return;
+
+            chk_params.Checked = false;
+
+            var parmdata = logdata.GetEnumeratorType("PARM").Select(a =>
+                new MAVLink.MAVLinkParam(a["Name"], double.Parse(a["Value"], CultureInfo.InvariantCulture),
+                    MAVLink.MAV_PARAM_TYPE.REAL32));
+            
+            MainV2.comPort.MAV.param.Clear();
+            MainV2.comPort.MAV.param.AddRange(parmdata);
+
+            var frm = new ConfigRawParamsTree().ShowUserControl();
+        }
+
+        private void treeView1_MouseDown(object sender, MouseEventArgs e)
+        {
+            wasrightclick = e.Button == MouseButtons.Right;
+            if (wasrightclick)
+            {
+                var pos = treeView1.PointToClient(Control.MousePosition);
+                var node = treeView1.GetNodeAt(pos);
+                if (node != null)
+                {
+                    node.Checked = !node.Checked;
+                }
+            }
         }
     }
 }

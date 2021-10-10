@@ -2,13 +2,16 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using GMap.NET;
 using MissionPlanner.Comms;
 using Newtonsoft.Json;
 
@@ -22,7 +25,7 @@ namespace MissionPlanner.Utilities
         {
             var tsk = Task.Run<T>(async () =>
             {
-                return await infunc.ConfigureAwait(true);
+                return await infunc.ConfigureAwait(false);
             });
 
             return tsk.GetAwaiter().GetResult();
@@ -46,25 +49,41 @@ namespace MissionPlanner.Utilities
         /// <returns></returns>
         public static IEnumerable<IEnumerable<T>> ChunkByField<T>(this IEnumerable<T> source, Func<T,T, int, bool> checkmatching)
         {
-            var pos = 0;
-            while (source.Skip(pos).Any())
+            while (source.Any())
             {
                 // store the first element to compare against
-                T first = source.Skip(pos).First();
+                T first = source.First();
+                int include = 0;
                 // build the list by comparing the first to all after it
-                var sublist = source.Skip(pos).TakeWhile((a,count) =>
+                var sublist = source.TakeWhile((a,count) =>
                 {
                     if (first.Equals(a))
                     {
+                        include++;
                         return true;
                     }
 
                     var check = checkmatching(first, a, count);
+                    if(check)
+                        include++;
                     return check;
-                });
+                }).ToList(); // tolist improves performance vs ienumerable requery on every access
                 yield return sublist;
                 // continue on in the list
-                pos += sublist.Count();
+                source = source.Skip(include);
+            }
+        }
+
+        public static IEnumerable<T> Traverse<T>(this IEnumerable<T> items, 
+            Func<T, IEnumerable<T>> childSelector)
+        {
+            var stack = new Stack<T>(items);
+            while(stack.Any())
+            {
+                var next = stack.Pop();
+                yield return next;
+                foreach(var child in childSelector(next))
+                    stack.Push(child);
             }
         }
 
@@ -87,6 +106,22 @@ namespace MissionPlanner.Utilities
         {
             return input.Select(a => (byte) a).ToArray();
         }
+                
+        public static string ToHexString(this byte[] input)
+        {
+            StringBuilder hex = new StringBuilder(input.Length * 2);
+            foreach (byte b in input)
+                hex.AppendFormat("{0:x2}", b);
+            return hex.ToString();
+        }
+
+        public static string ToHexString(this IEnumerable<byte> input)
+        {
+            StringBuilder hex = new StringBuilder(input.Count() * 2);
+            foreach (byte b in input)
+                hex.AppendFormat("{0:x2}", b);
+            return hex.ToString();
+        }
 
         public static string ToJSON(this object msg, Formatting fmt)
         {
@@ -97,9 +132,31 @@ namespace MissionPlanner.Utilities
             });
         }
 
+        public static string ToJSONWithType(this object msg)
+        {
+            return String.Format("\"{0}\": ",msg.GetType().Name) + msg.ToJSON(Formatting.Indented);
+        }
+
         public static string ToJSON(this object msg)
         {
             return msg.ToJSON(Formatting.Indented);
+        }
+
+        public static string ToJSON(this System.Type a_Type)
+        {
+            var TypeBlob = a_Type.GetFields().ToDictionary(x => x.Name, x => x.GetValue(null));
+            a_Type.GetProperties().ToDictionary(x => x.Name, x =>
+            {
+                try
+                {
+                    return x.GetValue(null);
+                }
+                catch (Exception ex)
+                {
+                    return ex.ToString();
+                }
+            }).ForEach(x => TypeBlob.Add(x.Key, x.Value));
+            return JsonConvert.SerializeObject(TypeBlob);
         }
 
         public static T FromJSON<T>(this string msg)
@@ -134,6 +191,7 @@ namespace MissionPlanner.Utilities
 
         public static byte[] MakeBytesSize(this string item, int length)
         {
+            if (item == null) throw new ArgumentNullException(nameof(item));
             var buffer = ASCIIEncoding.ASCII.GetBytes(item);
             if (buffer.Length == length)
                 return buffer;
@@ -142,6 +200,7 @@ namespace MissionPlanner.Utilities
         }
         public static byte[] MakeBytes(this string item)
         {
+            if (item == null) throw new ArgumentNullException(nameof(item));
             var buffer = ASCIIEncoding.ASCII.GetBytes(item);
             return buffer;
         }
@@ -281,6 +340,12 @@ namespace MissionPlanner.Utilities
             input.Add(new Tuple<T, T2, T3>(in1, in2, in3));
         }
 
+        public static bool IsNumber(this string value)
+        {
+            decimal num;
+            return decimal.TryParse(value, out num);
+        }
+
         public static bool IsNumber(this object value)
         {
             return IsNumber(value?.GetType());
@@ -316,6 +381,45 @@ namespace MissionPlanner.Utilities
                     return false;
                 default:
                     return false;
+            }
+        }
+
+        public static IEnumerable<T> IterateTreeType<T>(this T root, Func<T, IEnumerable<T>> childrenF)
+        {
+            var q = new List<T>() { root };
+            while (q.Any())
+            {
+                var c = q[0];
+                q.RemoveAt(0);
+                q.AddRange(childrenF(c) ?? Enumerable.Empty<T>());
+                yield return c;
+            }
+        }
+
+        public static IEnumerable<T> IterateTree<T>(this IEnumerable<T> root, Func<T, IEnumerable<T>> childrenF)
+        {
+            var q = new List<T>();
+            q.AddRange(root);
+            while (q.Any())
+            {
+                var c = q[0];
+                q.RemoveAt(0);
+                q.AddRange(childrenF(c) ?? Enumerable.Empty<T>());
+                yield return c;
+            }
+        }
+
+        public static IEnumerable<T> Flatten<T>(this IEnumerable collection)
+        {
+            foreach (var o in collection)
+            {
+                if (o is IEnumerable)
+                {
+                    foreach (T t in Flatten<T>((IEnumerable)o))
+                      yield return t;
+                }
+                else
+                    yield return (T)o;
             }
         }
 
@@ -467,6 +571,33 @@ namespace MissionPlanner.Utilities
             return pi.GetValue(obj);
         }
 
+        public static object GetPropertyOrFieldPrivate(this object obj, string name)
+        {
+            var type = obj.GetType();
+            var pi = type.GetProperty(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (pi == null)
+            {
+                var fi1 = type.GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                return fi1.GetValue(obj);
+            }
+            return pi.GetValue(obj);
+        }
+
+        public static int Search(this byte[] src, byte[] pattern, int startfrom = 0)
+        {
+            int maxFirstCharSlot = src.Length - pattern.Length + 1;
+            int j;
+            for (int i = startfrom; i < maxFirstCharSlot; i++)
+            {
+                if (src[i] != pattern[0]) continue;//comp only first byte
+        
+                // found a match on first byte, it tries to match rest of the pattern
+                for (j = pattern.Length - 1; j >= 1 && src[i + j] == pattern[j]; j--) ;
+                if (j == 0) return i;
+            }
+            return -1;
+        }
+
         static ConcurrentDictionary<Action,long> reentryDictionary = new ConcurrentDictionary<Action, long>();
 
         public static void ProtectReentry(Action action)
@@ -502,6 +633,16 @@ namespace MissionPlanner.Utilities
             return new DateTime(1970, 1, 1).AddSeconds(time);
         }
 
+        public static double toUnixTimeDouble(this DateTime dateTime)
+        {
+            return dateTime.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+        }
+
+        public static DateTime fromUnixTime(this double time)
+        {
+            return new DateTime(1970, 1, 1).AddSeconds(time);
+        }
+
         public static (int degrees, int minutes, float seconds) toDMS(this double angle)
         {
             double degrees = angle;
@@ -509,6 +650,11 @@ namespace MissionPlanner.Utilities
             double seconds = (minutes - (int) minutes) * 60;
 
             return ((int) degrees, (int)minutes, (float)seconds);
+        }
+
+        public static PointLatLngAlt ToPLLA(this PointLatLng pll, double alt)
+        {
+            return new PointLatLngAlt(pll) { Alt = alt };
         }
 
         public static double EvaluateMath(this String input)
@@ -550,5 +696,55 @@ namespace MissionPlanner.Utilities
             }
             return vals.Pop();
         }
+
+        public static IEnumerable<byte[]> ReadChunks(this Stream stream, int chunksize = 4096)
+        {
+            int read = 0;
+            var buffer = new byte[chunksize];
+            do
+            {
+                read = stream.Read(buffer, 0, buffer.Length);
+                yield return new Span<byte>(buffer, 0, read).ToArray();
+            } while (read > 0);
+        }
+
+        public static string ToInvariantString(this object obj)
+        {
+            if (obj != null)
+            {
+                if (!(obj is DateTime))
+                {
+                    if (!(obj is DateTimeOffset))
+                    {
+                        IConvertible c = obj as IConvertible;
+                        if (c == null)
+                        {
+                            IFormattable f = obj as IFormattable;
+                            if (f == null)
+                            {
+                                return obj.ToString();
+                            }
+                            return f.ToString(null, CultureInfo.InvariantCulture);
+                        }
+                        return c.ToString(CultureInfo.InvariantCulture);
+                    }
+                    return ((DateTimeOffset)obj).ToString("o", CultureInfo.InvariantCulture);
+                }
+                return ((DateTime)obj).ToString("o", CultureInfo.InvariantCulture);
+            }
+            return null;
+        }
+
+        /*
+        public static byte[] Compress(this byte[] input)
+        {
+            return LZ4Pickler.Pickle(input);
+        }
+
+        public static byte[] Decompress(this byte[] input)
+        {
+            return LZ4Pickler.Unpickle(input);
+        }
+        */
     }
 }

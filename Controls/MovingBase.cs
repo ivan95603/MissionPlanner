@@ -1,12 +1,12 @@
-﻿using MissionPlanner.Comms;
-using MissionPlanner.Utilities;
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
 using System.Windows.Forms;
+using MissionPlanner.Comms;
+using MissionPlanner.Utilities;
 
-namespace MissionPlanner
+namespace MissionPlanner.Controls
 {
     public partial class MovingBase : Form
     {
@@ -151,7 +151,7 @@ namespace MissionPlanner
 
             DateTime nextrallypntupdate = DateTime.Now;
 
-            StreamWriter sw = new StreamWriter(Settings.GetUserDataDirectory() + File.OpenWrite("MovingBase.txt"));
+            StreamWriter sw = new StreamWriter(Settings.GetUserDataDirectory() + "MovingBase.txt");
 
             threadrun = true;
             while (threadrun)

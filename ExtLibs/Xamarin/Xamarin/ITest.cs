@@ -4,13 +4,38 @@ using System.Text;
 using System.Threading.Tasks;
 using MissionPlanner.ArduPilot;
 using MissionPlanner.Comms;
+using MissionPlanner.Utilities;
 
 namespace Xamarin
 {
     public class Test
     {
+        public static IBlueToothDevice BlueToothDevice { get; set; }
         public static IUSBDevices UsbDevices { get; set; }
         public static IRadio Radio { get; set; }
+
+        public static IGPS GPS { get; set; }
+
+        public static ISystemInfo SystemInfo {
+            get;
+            set;
+        }
+    }
+
+    public interface ISystemInfo
+    {
+        string GetSystemTag();
+    }
+
+    public interface IGPS
+    {
+        Task<(double lat,double lng,double alt)> GetPosition();
+    }
+
+    public interface IBlueToothDevice
+    {
+        Task<List<DeviceInfo>> GetDeviceInfoList();
+        Task<ICommsSerial> GetBT(DeviceInfo first);
     }
 
     public interface IRadio
@@ -44,6 +69,6 @@ namespace Xamarin
         /// </summary>
         void USBEventCallBack(object usbDeviceReceiver, object device);
 
-        event EventHandler<object> USBEvent;
+        event EventHandler<DeviceInfo> USBEvent;
     }
 }

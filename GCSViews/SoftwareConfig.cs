@@ -86,6 +86,7 @@ namespace MissionPlanner.GCSViews
                         if (MainV2.comPort.MAV.cs.firmware == Firmwares.ArduPlane)
                         {
                             start = AddBackstageViewPage(typeof(ConfigArduplane), Strings.BasicTuning);
+                            AddBackstageViewPage(typeof(ConfigArducopter), "QP " + Strings.ExtendedTuning);
                         }
 
                         if (MainV2.comPort.MAV.cs.firmware == Firmwares.ArduRover)
@@ -108,7 +109,7 @@ namespace MissionPlanner.GCSViews
                             AddBackstageViewPage(typeof(ConfigFriendlyParamsAdv), Strings.AdvancedParams, null, true);
                         }
 
-                        if (!Program.MONO && ConfigOSD.IsApplicable())
+                        if (!Program.MONO && ConfigOSD.IsApplicable() && MainV2.DisplayConfiguration.displayOSD)
                         {
                             AddBackstageViewPage(typeof(ConfigOSD), Strings.OnboardOSD);
                         }
@@ -116,7 +117,7 @@ namespace MissionPlanner.GCSViews
                         if ((MainV2.comPort.MAV.cs.capabilities & (int) MAVLink.MAV_PROTOCOL_CAPABILITY.FTP) > 0)
                             AddBackstageViewPage(typeof(MavFTPUI), Strings.MAVFtp);
 
-                        if (true)
+                        if (MainV2.DisplayConfiguration.displayUserParam)
                         {
                             AddBackstageViewPage(typeof(ConfigUserDefined), Strings.User_Params);
                         }
@@ -151,11 +152,17 @@ namespace MissionPlanner.GCSViews
                             AddBackstageViewPage(typeof(ConfigParamLoading), Strings.Loading);
                     }
 
-                    AddBackstageViewPage(typeof(ConfigPlanner), Strings.Planner);
+                    if (MainV2.DisplayConfiguration.displayPlannerSettings)
+                    {
+                        AddBackstageViewPage(typeof(ConfigPlanner), Strings.Planner);
+                    }
                 }
                 else
                 {
-                    start = AddBackstageViewPage(typeof(ConfigPlanner), Strings.Planner);
+                    if (MainV2.DisplayConfiguration.displayPlannerSettings)
+                    {
+                        start = AddBackstageViewPage(typeof(ConfigPlanner), Strings.Planner);
+                    }
                 }
 
                 // apply theme before trying to display it

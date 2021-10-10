@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using SkiaSharp;
 
 namespace System.Drawing
@@ -18,7 +19,7 @@ namespace System.Drawing
             {
                 nativeBrush = new SKPaint() {Color = color.ToSKColor()};
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 //Console.WriteLine(e);
             }
@@ -39,11 +40,19 @@ namespace System.Drawing
                 {
                     nativeBrush.Color = value.ToSKColor();
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     //Console.WriteLine(e);
                 }
             }
+        }
+
+        public void ScaleTransform(float rectangleWidth, float rectangleHeight, MatrixOrder append)
+        {
+        }
+
+        public void TranslateTransform(float rectangleLeft, float rectangleTop, MatrixOrder append)
+        {
         }
     }
 }

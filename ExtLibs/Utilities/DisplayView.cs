@@ -14,11 +14,16 @@ namespace MissionPlanner.Utilities
     public enum DisplayNames
     {
         Basic,
-        Advanced
+        Advanced,
+        Custom
     }
     [Serializable]
     public class DisplayView
     {
+        public bool displayRTKInject { get; set; } = true;
+        public bool displayGPSOrder { get; set; } = true;
+        public bool displayHWIDs { get; set; } = true;
+        public bool displayADSB { get; set; } = true;
         public DisplayNames displayName { get; set; }
 
         //MainV2 buttons
@@ -92,6 +97,14 @@ namespace MissionPlanner.Utilities
         public Boolean standardFlightModesOnly { get; set; }
         public Boolean autoHideMenuForce { get; set; }
         public bool isAdvancedMode { get; set; }
+        public bool displayServoOutput { get; set; } = true;
+        public bool displayJoystick { get; set; } = true;
+        public bool displayOSD { get; set; } = true;
+        public bool displayUserParam { get; set; } = true;
+        public bool displayPlannerSettings { get; set; } = true;
+        public bool displayFFTSetup { get; set; } = true;
+        public bool displayPreFlightTabEdit { get; set; } = true;
+        public bool displayPlannerLayout { get; set; } = true;
 
         public DisplayView()
         {
@@ -138,6 +151,7 @@ namespace MissionPlanner.Utilities
             displayAccelCalibration = true;
             displayCompassConfiguration = true;
             displayRadioCalibration = true;
+            displayServoOutput = true;
             displayEscCalibration = true;
             displayFlightModes = true;
             displayFailSafe = true;
@@ -156,6 +170,8 @@ namespace MissionPlanner.Utilities
             displayParachute = true;
             displayEsp = true;
             displayAntennaTracker = true;
+            displayRTKInject = true;
+            displayJoystick = true;
 
 
             //config tuning
@@ -170,6 +186,7 @@ namespace MissionPlanner.Utilities
             standardFlightModesOnly = false;
             displaySerialPortCMB = true;
             autoHideMenuForce = false;
+            displayOSD = true;
             isAdvancedMode = false;
         }
     }
@@ -180,15 +197,27 @@ namespace MissionPlanner.Utilities
             result = new DisplayView();
             var serializer = new XmlSerializer(result.GetType());
 
-
             using (TextReader reader = new StringReader(value))
             {
+                if (!value.StartsWith("{"))
+                {
+                    try
+                    {
+                        result = (DisplayView) serializer.Deserialize(reader);
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        return false;
+                    }
+                }
+
                 try
                 {
-                    result = (DisplayView)serializer.Deserialize(reader);
+                    result = value.FromJSON<DisplayView>();
                     return true;
                 }
-                catch (Exception)
+                catch
                 {
                     return false;
                 }
@@ -196,6 +225,8 @@ namespace MissionPlanner.Utilities
         }
         public static string ConvertToString(this DisplayView v)
         {
+            return v.ToJSON();
+
             XmlSerializer xmlSerializer = new XmlSerializer(v.GetType());
             using (StringWriter textWriter = new StringWriter())
             {
@@ -246,6 +277,7 @@ namespace MissionPlanner.Utilities
                 displayAccelCalibration = true,
                 displayCompassConfiguration = true,
                 displayRadioCalibration = true,
+                displayServoOutput = true,
                 displayEscCalibration = true,
                 displayFlightModes = true,
                 displayFailSafe = true,
@@ -264,9 +296,11 @@ namespace MissionPlanner.Utilities
                 displayParachute = true,
                 displayEsp = true,
                 displayAntennaTracker = true,
+                displayRTKInject = true,
+                displayJoystick = true,
 
 
-                //config tuning
+                 //config tuning
                 displayBasicTuning = true,
                 displayExtendedTuning = true,
                 displayStandardParams = true,
@@ -276,6 +310,7 @@ namespace MissionPlanner.Utilities
                 displayParamCommitButton = false,
                 displayBaudCMB = true,
                 displaySerialPortCMB = true,
+                displayOSD = true,
                 standardFlightModesOnly = false,
                 autoHideMenuForce = false,
                 isAdvancedMode = false
@@ -324,6 +359,7 @@ namespace MissionPlanner.Utilities
                 displayAccelCalibration = true,
                 displayCompassConfiguration = true,
                 displayRadioCalibration = true,
+                displayServoOutput = true,
                 displayEscCalibration = true,
                 displayFlightModes = true,
                 displayFailSafe = true,
@@ -342,6 +378,8 @@ namespace MissionPlanner.Utilities
                 displayParachute = true,
                 displayEsp = true,
                 displayAntennaTracker = true,
+                displayRTKInject = true,
+                displayJoystick = true,
 
 
                 //config tuning
@@ -355,9 +393,25 @@ namespace MissionPlanner.Utilities
                 displayBaudCMB = true,
                 displaySerialPortCMB = true,
                 standardFlightModesOnly =  false,
+                displayOSD = true,
                 autoHideMenuForce = false,
                 isAdvancedMode = true
             };
+        }
+
+        public static string custompath = Settings.GetRunningDirectory() + Path.DirectorySeparatorChar + "custom.displayview";
+
+        public static DisplayView Custom(this DisplayView v)
+        {
+            var result = new DisplayView().Advanced();
+
+            if (File.Exists(custompath) && TryParse(File.ReadAllText(custompath), out result))
+            {
+                result.displayName = DisplayNames.Custom;
+                return result;
+            }
+
+            return result;
         }
     }
 }

@@ -10,16 +10,23 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using log4net;
+using MissionPlanner.ArduPilot;
 
 namespace MissionPlanner.GCSViews
 {
     public partial class SITL : MyUserControl, IActivate
     {
+        internal static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+
         //https://regex101.com/r/cH3kV3/2
         //https://regex101.com/r/cH3kV3/3
         Regex default_params_regex = new Regex(@"""([^""]+)""\s*:\s*\{\s*[^\{}]+""default_params_filename""\s*:\s*\[*""([^""]+)""\s*[^\}]*\}");
@@ -28,6 +35,8 @@ namespace MissionPlanner.GCSViews
 
         string sitldirectory = Settings.GetUserDataDirectory() + "sitl" +
                                Path.DirectorySeparatorChar;
+
+        public static string BundledPath = "";
 
         GMapOverlay markeroverlay;
 
@@ -101,7 +110,10 @@ namespace MissionPlanner.GCSViews
 
         public void Activate()
         {
-            homemarker.Position = MainV2.comPort.MAV.cs.PlannedHomeLocation;
+            if(MainV2.comPort.MAV.cs.PlannedHomeLocation.Lat == 0 && MainV2.comPort.MAV.cs.PlannedHomeLocation.Lng == 0)
+                homemarker.Position = new PointLatLng(-35.3633515, 149.1652412);
+            else
+                homemarker.Position = MainV2.comPort.MAV.cs.PlannedHomeLocation;
 
             myGMAP1.Position = homemarker.Position;
 
@@ -133,8 +145,16 @@ namespace MissionPlanner.GCSViews
                 return;
             }
 
-
-            StartSITL(await exepath, "plane", BuildHomeLocation(markeroverlay.Markers[0].Position, (int)NUM_heading.Value), "", (int)num_simspeed.Value);
+            try
+            {
+                StartSITL(await exepath, "plane",
+                    BuildHomeLocation(markeroverlay.Markers[0].Position, (int) NUM_heading.Value), "",
+                    (int) num_simspeed.Value);
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show("Failed to download and start sitl\n" + ex.ToString());
+            }
         }
 
         private async void pictureBoxrover_Click(object sender, EventArgs e)
@@ -144,9 +164,18 @@ namespace MissionPlanner.GCSViews
                 CustomMessageBox.Show(Strings.Invalid_home_location);
                 return;
             }
-            var exepath = CheckandGetSITLImage("APMrover2.elf");
 
-            StartSITL(await exepath, "rover", BuildHomeLocation(markeroverlay.Markers[0].Position, (int)NUM_heading.Value), "", (int)num_simspeed.Value);
+            var exepath = CheckandGetSITLImage("ArduRover.elf");
+            try
+            {
+                StartSITL(await exepath, "rover",
+                    BuildHomeLocation(markeroverlay.Markers[0].Position, (int) NUM_heading.Value), "",
+                    (int) num_simspeed.Value);
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show("Failed to download and start sitl\n" + ex.ToString());
+            }
         }
 
         private async void pictureBoxquad_Click(object sender, EventArgs e)
@@ -156,9 +185,18 @@ namespace MissionPlanner.GCSViews
                 CustomMessageBox.Show(Strings.Invalid_home_location);
                 return;
             }
-            var exepath = CheckandGetSITLImage("ArduCopter.elf");
 
-            StartSITL(await exepath, "+", BuildHomeLocation(markeroverlay.Markers[0].Position, (int)NUM_heading.Value), "", (int)num_simspeed.Value);
+            var exepath = CheckandGetSITLImage("ArduCopter.elf");
+            try
+            {
+                StartSITL(await exepath, "+",
+                    BuildHomeLocation(markeroverlay.Markers[0].Position, (int) NUM_heading.Value), "",
+                    (int) num_simspeed.Value);
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show("Failed to download and start sitl\n" + ex.ToString());
+            }
         }
 
         private async void pictureBoxheli_Click(object sender, EventArgs e)
@@ -168,9 +206,18 @@ namespace MissionPlanner.GCSViews
                 CustomMessageBox.Show(Strings.Invalid_home_location);
                 return;
             }
-            var exepath = CheckandGetSITLImage("ArduHeli.elf");
 
-            StartSITL(await exepath, "heli", BuildHomeLocation(markeroverlay.Markers[0].Position, (int)NUM_heading.Value), "", (int)num_simspeed.Value);
+            var exepath = CheckandGetSITLImage("ArduHeli.elf");
+            try
+            {
+                StartSITL(await exepath, "heli",
+                    BuildHomeLocation(markeroverlay.Markers[0].Position, (int) NUM_heading.Value), "",
+                    (int) num_simspeed.Value);
+            }
+            catch (Exception ex)
+            {
+                CustomMessageBox.Show("Failed to download and start sitl\n" + ex.ToString());
+            }
         }
 
         string BuildHomeLocation(PointLatLng homelocation, int heading = 0)
@@ -179,35 +226,162 @@ namespace MissionPlanner.GCSViews
                 srtm.getAltitude(homelocation.Lat, homelocation.Lng).alt.ToString(CultureInfo.InvariantCulture), heading.ToString(CultureInfo.InvariantCulture));
         }
 
+        [DllImport("libc", SetLastError = true)]
+        private static extern int chmod(string pathname, int mode);
+
+        // user permissions
+        const int S_IRUSR = 0x100;
+        const int S_IWUSR = 0x80;
+        const int S_IXUSR = 0x40;
+
+        // group permission
+        const int S_IRGRP = 0x20;
+        const int S_IWGRP = 0x10;
+        const int S_IXGRP = 0x8;
+
+        // other permissions
+        const int S_IROTH = 0x4;
+        const int S_IWOTH = 0x2;
+        const int S_IXOTH = 0x1;
+
+        /// <summary>
+        /// Try BundlePath first, then arm manifest, then cygwin on server
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns></returns>
         private async Task<string> CheckandGetSITLImage(string filename)
         {
-            Uri fullurl = new Uri(sitlurl, filename);
+            if (BundledPath != "")
+            {
+                filename = filename.Replace(".elf", "");
+                var file = filename;
+                if (!File.Exists(BundledPath + System.IO.Path.DirectorySeparatorChar + file))
+                {
+                    string[] checks = new string[] { "{0}", "{0}.exe", "lib{0}.so", "{0}.so", "{0}.elf" };
 
-            var load = Common.LoadingBox("Downloading", "Downloading sitl software");
+                    foreach (var template in checks)
+                    {
+                        file = String.Format(template, filename);
+                        if (File.Exists(BundledPath + System.IO.Path.DirectorySeparatorChar + file))
+                        {
+                            return BundledPath + System.IO.Path.DirectorySeparatorChar + file;
+                        }
+                        file = file.ToLower();
+                        if (File.Exists(BundledPath + System.IO.Path.DirectorySeparatorChar + file))
+                        {
+                            return BundledPath + System.IO.Path.DirectorySeparatorChar + file;
+                        }
+                    }
+                }
 
-            var t1 = Download.getFilefromNetAsync(fullurl.ToString(),
-                sitldirectory + Path.GetFileNameWithoutExtension(filename) + ".exe");
+                return "";
+            }
 
-            load.Refresh();
+            if ((RuntimeInformation.OSArchitecture == Architecture.X64 ||
+              RuntimeInformation.OSArchitecture == Architecture.X86) && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var type = APFirmware.MAV_TYPE.Copter;
+                if (filename.ToLower().Contains("copter"))
+                    type = APFirmware.MAV_TYPE.Copter;
+                if (filename.ToLower().Contains("plane"))
+                    type = APFirmware.MAV_TYPE.FIXED_WING;
+                if (filename.ToLower().Contains("rover"))
+                    type = APFirmware.MAV_TYPE.GROUND_ROVER;
+                if (filename.ToLower().Contains("heli"))
+                    type = APFirmware.MAV_TYPE.HELICOPTER;
 
-            // dependancys
-            var depurl = new Uri(sitlurl, "cyggcc_s-1.dll");
-            var t2 = Download.getFilefromNetAsync(depurl.ToString(), sitldirectory + depurl.Segments[depurl.Segments.Length - 1]);
+                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid = "" }, APFirmware.RELEASE_TYPES.OFFICIAL, type);
+                fw = fw.Where(a => a.Platform == "SITL_x86_64_linux_gnu").ToList();
+                if (fw.Count > 0)
+                {
+                    var path = sitldirectory + Path.GetFileNameWithoutExtension(filename);
+                    if (!chk_skipdownload.Checked)
+                    {
+                        Download.getFilefromNet(fw.First().Url.AbsoluteUri, path);
+                        try
+                        {
+                            int _0755 = S_IRUSR | S_IXUSR | S_IWUSR
+                                | S_IRGRP | S_IXGRP
+                                | S_IROTH | S_IXOTH;
 
-            load.Refresh();
-            depurl = new Uri(sitlurl, "cygstdc++-6.dll");
-            var t3 = Download.getFilefromNetAsync(depurl.ToString(), sitldirectory + depurl.Segments[depurl.Segments.Length - 1]);
+                            chmod(path, _0755);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Error(ex);
+                        }
+                    }
+                    return path;
+                }
+            }
+            
+            if (RuntimeInformation.OSArchitecture == Architecture.Arm ||
+               RuntimeInformation.OSArchitecture == Architecture.Arm64)
+            {
+                var type = APFirmware.MAV_TYPE.Copter;
+                if (filename.ToLower().Contains("copter"))
+                    type = APFirmware.MAV_TYPE.Copter;
+                if (filename.ToLower().Contains("plane"))
+                    type = APFirmware.MAV_TYPE.FIXED_WING;
+                if (filename.ToLower().Contains("rover"))
+                    type = APFirmware.MAV_TYPE.GROUND_ROVER;
+                if (filename.ToLower().Contains("heli"))
+                    type = APFirmware.MAV_TYPE.HELICOPTER;
 
-            load.Refresh();
-            depurl = new Uri(sitlurl, "cygwin1.dll");
-            var t4 = Download.getFilefromNetAsync(depurl.ToString(), sitldirectory + depurl.Segments[depurl.Segments.Length - 1]);
+                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid="" }, APFirmware.RELEASE_TYPES.OFFICIAL, type);
+                fw = fw.Where(a => a.Platform == "SITL_arm_linux_gnueabihf").ToList();
+                if (fw.Count > 0)
+                {
+                    var path = sitldirectory + Path.GetFileNameWithoutExtension(filename);
+                    if (!chk_skipdownload.Checked)
+                    {
+                        Download.getFilefromNet(fw.First().Url.AbsoluteUri, path);
+                        try {
+                            int _0755 =            S_IRUSR | S_IXUSR | S_IWUSR
+                                | S_IRGRP | S_IXGRP
+                                | S_IROTH | S_IXOTH;
 
-            await t1.ConfigureAwait(true);
-            await t2.ConfigureAwait(true);
-            await t3.ConfigureAwait(true);
-            await t4.ConfigureAwait(true);
+                            chmod(path, _0755);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Error(ex);
+                        }
+                    }
+                    return path;
+                }
+            }
 
-            load.Close();
+            if (!chk_skipdownload.Checked)
+            {
+                Uri fullurl = new Uri(sitlurl, filename);
+
+                var load = Common.LoadingBox("Downloading", "Downloading sitl software");
+
+                var t1 = Download.getFilefromNetAsync(fullurl.ToString(),
+                    sitldirectory + Path.GetFileNameWithoutExtension(filename) + ".exe");
+
+                load.Refresh();
+
+                var files = new string[] { "cygatomic-1.dll",
+                    "cyggcc_s-1.dll",
+                    "cyggomp-1.dll",
+                    "cygquadmath-0.dll",
+                    "cygssp-0.dll",
+                    "cygstdc++-6.dll",
+                    "cygwin1.dll"
+                };
+
+                // dependancys
+
+                Parallel.ForEach(files, new ParallelOptions() { MaxDegreeOfParallelism = 2 }, (a, b) =>
+                {
+                    var depurl = new Uri(sitlurl, a);
+                    var t2 = Download.getFilefromNet(depurl.ToString(), sitldirectory + depurl.Segments[depurl.Segments.Length - 1]);
+                });
+                 
+                load.Close();
+            }
 
             return sitldirectory + Path.GetFileNameWithoutExtension(filename) + ".exe";
         }
@@ -234,66 +408,76 @@ namespace MissionPlanner.GCSViews
             }
 
             if (await Download.getFilefromNetAsync(
-                    "https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/autotest/pysim/vehicleinfo.py",
+                    "https://firmware.ardupilot.org/Tools/MissionPlanner/vehicleinfo.py",
                     sitldirectory + "vehicleinfo.py").ConfigureAwait(false) || File.Exists(sitldirectory + "vehicleinfo.py"))
             {
-                cleanupJson(sitldirectory + "vehicleinfo.py");
-
-                using (Newtonsoft.Json.JsonTextReader reader =
-                    new JsonTextReader(File.OpenText(sitldirectory + "vehicleinfo.py")))
+                try
                 {
-                    JsonSerializer serializer = new JsonSerializer();
-                    var obj = (JObject)serializer.Deserialize(reader);
+                    cleanupJson(sitldirectory + "vehicleinfo.py");
 
-                    if (obj == null)
-                        return "";
-
-                    foreach (var fwtype in obj)
+                    using (Newtonsoft.Json.JsonTextReader reader =
+                        new JsonTextReader(File.OpenText(sitldirectory + "vehicleinfo.py")))
                     {
-                        var frames = fwtype.Value["frames"];
+                        JsonSerializer serializer = new JsonSerializer();
+                        var obj = (JObject) serializer.Deserialize(reader);
 
-                        if (frames == null)
-                            continue;
+                        if (obj == null)
+                            return "";
 
-                        var config = frames[model];
-
-                        if (config == null)
-                            continue;
-
-                        var configs = config["default_params_filename"];
-
-                        if (configs is JValue)
+                        foreach (var fwtype in obj)
                         {
-                            Directory.CreateDirectory(Path.GetDirectoryName(sitldirectory + configs.ToString()));
+                            var frames = fwtype.Value["frames"];
 
-                            if (await Download.getFilefromNetAsync(
-                                    "https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/autotest/" +
-                                    configs.ToString(),
-                                    sitldirectory + configs.ToString()).ConfigureAwait(false) || File.Exists(sitldirectory + configs.ToString()))
+                            if (frames == null)
+                                continue;
+
+                            var config = frames[model];
+
+                            if (config == null)
+                                continue;
+
+                            var configs = config["default_params_filename"];
+
+                            if (configs is JValue)
                             {
-                                return sitldirectory + configs.ToString();
+                                Directory.CreateDirectory(Path.GetDirectoryName(sitldirectory + configs.ToString()));
+
+                                if (await Download.getFilefromNetAsync(
+                                        "https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/autotest/" +
+                                        configs.ToString(),
+                                        sitldirectory + configs.ToString()).ConfigureAwait(false) ||
+                                    File.Exists(sitldirectory + configs.ToString()))
+                                {
+                                    return sitldirectory + configs.ToString();
+                                }
                             }
-                        }
 
-                        string data = "";
+                            string data = "";
 
-                        foreach (var config1 in configs)
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(sitldirectory + config1.ToString()));
-
-                            if (await Download.getFilefromNetAsync(
-                                    "https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/autotest/" +
-                                    config1.ToString(),
-                                    sitldirectory + config1.ToString()).ConfigureAwait(false) || File.Exists(sitldirectory + config1.ToString()))
+                            foreach (var config1 in configs)
                             {
-                                data += "\r\n" + File.ReadAllText(sitldirectory + config1.ToString());
-                            }
-                        }
+                                Directory.CreateDirectory(Path.GetDirectoryName(sitldirectory + config1.ToString()));
 
-                        var temp = Path.GetTempFileName();
-                        File.WriteAllText(temp, data);
-                        return temp;
+                                if (await Download.getFilefromNetAsync(
+                                        "https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/autotest/" +
+                                        config1.ToString(),
+                                        sitldirectory + config1.ToString()).ConfigureAwait(false) ||
+                                    File.Exists(sitldirectory + config1.ToString()))
+                                {
+                                    data += "\r\n" + File.ReadAllText(sitldirectory + config1.ToString());
+                                }
+                            }
+
+                            var temp = Path.GetTempFileName();
+                            File.WriteAllText(temp, data);
+                            return temp;
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    log.Error(ex);
+                    Console.WriteLine(ex.ToString());
                 }
             }
             return "";
@@ -306,6 +490,9 @@ namespace MissionPlanner.GCSViews
             var match = BraceMatch(content, '{', '}');
 
             match = Regex.Replace(match, @"#.*", "");
+
+            match = Regex.Replace(match, @"True", "\"True\"");
+            match = Regex.Replace(match, @"False", "\"False\"");
 
             // ensure any handles are closed
             GC.Collect();
@@ -404,19 +591,53 @@ namespace MissionPlanner.GCSViews
             exestart.Arguments = String.Format("-M{0} -O{1} -s{2} --uartA tcp:0 {3}", model, homelocation, speedup, extraargs);
             exestart.WorkingDirectory = simdir;
             exestart.WindowStyle = ProcessWindowStyle.Minimized;
-            exestart.UseShellExecute = true;
-
-            try
+            Console.WriteLine("sitl: {0} {1} {2}", exestart.WorkingDirectory, exestart.FileName,
+                exestart.Arguments);
+            if (RuntimeInformation.OSArchitecture == Architecture.X64 ||
+                RuntimeInformation.OSArchitecture == Architecture.X86)
             {
-                simulator.Add(System.Diagnostics.Process.Start(exestart));
+                exestart.UseShellExecute = true;
+
+                try
+                {
+                    simulator.Add(System.Diagnostics.Process.Start(exestart));
+                }
+                catch (Exception ex)
+                {
+                    CustomMessageBox.Show("Failed to start the simulator\n" + ex.ToString(), Strings.ERROR);
+                    return;
+                }
             }
-            catch (Exception ex)
+            else
             {
-                CustomMessageBox.Show("Failed to start the simulator\n" + ex.ToString(), Strings.ERROR);
-                return;
+
+                exestart.UseShellExecute = false;
+                exestart.RedirectStandardOutput = true;
+                exestart.RedirectStandardError = true;
+
+                try
+                {
+                    var proc = System.Diagnostics.Process.Start(exestart);
+                    simulator.Add(proc);
+
+                    proc.ErrorDataReceived += (sender, args) => { Console.WriteLine("SITL ERR: " + args.Data); };
+
+                    proc.OutputDataReceived += (sender, args) => { Console.WriteLine("SITL: " + args.Data); };
+
+                    proc.Exited += (sender, args) => { Console.WriteLine("SITL EXIT!"); };
+
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+
+                }
+                catch (Exception ex)
+                {
+                    CustomMessageBox.Show("Failed to start the simulator\n" + ex.ToString(), Strings.ERROR);
+                    return;
+                }
             }
 
-            System.Threading.Thread.Sleep(2000);
+            await Task.Delay(2000);
 
             MainV2.View.ShowScreen(MainV2.View.screens[0].Name);
 
@@ -430,7 +651,7 @@ namespace MissionPlanner.GCSViews
 
                 SITLSEND = new UdpClient("127.0.0.1", 5501);
 
-                Thread.Sleep(200);
+                await Task.Delay(200);
 
                 MainV2.instance.doConnect(MainV2.comPort, "preset", "5760");
             }
@@ -522,14 +743,14 @@ namespace MissionPlanner.GCSViews
 
             if (keyData == (Keys.Control | Keys.D))
             {
-                StartSwarmSeperate();
+                _ = StartSwarmSeperate(Firmwares.ArduCopter2);
                 return true;
             }
 
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        public async Task StartSwarmSeperate()
+        public async Task StartSwarmSeperate(Firmwares firmware)
         {
             var max = 10;
 
@@ -551,10 +772,24 @@ namespace MissionPlanner.GCSViews
             catch
             {
             }
-
-            var exepath = CheckandGetSITLImage("ArduCopter.elf");
-            var model = "+";
-
+            Task<string> exepath;
+            string model = "";
+            if (firmware == Firmwares.ArduPlane)
+            {
+                exepath = CheckandGetSITLImage("ArduPlane.elf");
+                model = "plane";
+            } else 
+            if (firmware == Firmwares.ArduRover)
+            {
+                exepath = CheckandGetSITLImage("ArduRover.elf");
+                model = "rover";
+            }
+            else // (firmware == Firmwares.ArduCopter2)
+            {
+                exepath = CheckandGetSITLImage("ArduCopter.elf");
+                model = "+";
+            }
+            
             var config = await GetDefaultConfig(model);
             
             max--;
@@ -592,6 +827,7 @@ SYSID_THISMAV={0}
 SIM_TERRAIN=0
 TERRAIN_ENABLE=0
 SCHED_LOOP_RATE=50
+SIM_RATE_HZ=400
 SIM_DRIFT_SPEED=0
 SIM_DRIFT_TIME=0
 ", a + 1));
@@ -611,15 +847,18 @@ SIM_DRIFT_TIME=0
                 exestart.UseShellExecute = true;
 
                 simulator.Add(System.Diagnostics.Process.Start(exestart));
+
+                await Task.Delay(100);
             }
 
-            System.Threading.Thread.Sleep(2000);
+            await Task.Delay(2000);
 
             MainV2.View.ShowScreen(MainV2.View.screens[0].Name);
 
             try
             {
-                for (int a = (int)max; a >= 0; a--)
+                Parallel.For(0, max+1, (a) =>
+                    //for (int a = (int)max; a >= 0; a--)
                 {
                     var mav = new MAVLinkInterface();
 
@@ -633,28 +872,28 @@ SIM_DRIFT_TIME=0
 
                     Thread.Sleep(200);
 
-                    MainV2.instance.doConnect(mav, "preset", "5760");
+                    this.InvokeIfRequired(() => { MainV2.instance.doConnect(mav, "preset", "5760", false); });
+
+                    lock(this)
+                        MainV2.Comports.Add(mav);
 
                     try
                     {
-                        mav.GetParam((byte)mav.sysidcurrent, (byte)mav.compidcurrent, "SYSID_THISMAV");
-                        mav.setParam("SYSID_THISMAV", a + 1, true);
-
-                        mav.GetParam((byte)mav.sysidcurrent, (byte)mav.compidcurrent, "FRAME_CLASS");
-                        mav.setParam("FRAME_CLASS", 1, true);
+                        _ =  mav.getParamListMavftpAsync((byte) mav.sysidcurrent, (byte) mav.compidcurrent);
                     }
                     catch
                     {
                     }
-
-                    MainV2.Comports.Add(mav);
                 }
+                );
 
                 return;
             }
-            catch
+            catch (Exception ex)
             {
-                CustomMessageBox.Show(Strings.Failed_to_connect_to_SITL_instance, Strings.ERROR);
+                log.Error(ex);
+                CustomMessageBox.Show(Strings.Failed_to_connect_to_SITL_instance +
+                                      ex.InnerException?.Message, Strings.ERROR);
                 return;
             }
         }
@@ -721,6 +960,7 @@ SYSID_THISMAV={0}
 SIM_TERRAIN=0
 TERRAIN_ENABLE=0
 SCHED_LOOP_RATE=50
+SIM_RATE_HZ=400
 SIM_DRIFT_SPEED=0
 SIM_DRIFT_TIME=0
 ", a + 1));
@@ -766,7 +1006,15 @@ SIM_DRIFT_TIME=0
 
                 Thread.Sleep(200);
 
-                MainV2.instance.doConnect(MainV2.comPort, "preset", "5760");
+                this.InvokeIfRequired(() => { MainV2.instance.doConnect(MainV2.comPort, "preset", "5760", false); });
+
+                try
+                {
+                    _ = MainV2.comPort.getParamListMavftpAsync((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent);
+                }
+                catch
+                {
+                }
 
                 return;
             }
@@ -784,7 +1032,17 @@ SIM_DRIFT_TIME=0
 
         private void but_swarmlink_Click(object sender, EventArgs e)
         {
-             StartSwarmSeperate();
+            _ = StartSwarmSeperate(Firmwares.ArduCopter2);
+        }
+
+        private void but_swarmplane_Click(object sender, EventArgs e)
+        {
+            _ = StartSwarmSeperate(Firmwares.ArduPlane);
+        }
+
+        private void but_swarmrover_Click(object sender, EventArgs e)
+        {
+            _ = StartSwarmSeperate(Firmwares.ArduRover);
         }
     }
 }

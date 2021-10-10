@@ -244,42 +244,7 @@ namespace MissionPlanner.Utilities
 
             return options.softwares;
         }
-
-        public static void SaveSoftwares(optionsObject list)
-        {
-            System.Xml.Serialization.XmlSerializer writer =
-                new System.Xml.Serialization.XmlSerializer(typeof(optionsObject), new Type[] { typeof(software) });
-
-            using (
-                StreamWriter sw =
-                    new StreamWriter(Settings.GetUserDataDirectory() + "fwversions.xml"))
-            {
-                writer.Serialize(sw, list);
-            }
-        }
-
-        public static List<software> LoadSoftwares()
-        {
-            try
-            {
-                System.Xml.Serialization.XmlSerializer reader =
-                    new System.Xml.Serialization.XmlSerializer(typeof(optionsObject), new Type[] { typeof(software) });
-
-                using (
-                    StreamReader sr =
-                        new StreamReader(Settings.GetUserDataDirectory() + "fwversions.xml"))
-                {
-                    return ((optionsObject)reader.Deserialize(sr)).softwares;
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Error(ex);
-            }
-
-            return new List<software>();
-        }
-
+      
         void updateProgress(int percent, string status)
         {
             if (Progress != null)
@@ -677,7 +642,6 @@ namespace MissionPlanner.Utilities
         /// <param name="filename"></param>
         public bool UploadPX4(string filename, BoardDetect.boards board)
         {
-            Uploader up;
             updateProgress(-1, "Reading Hex File");
             px4uploader.Firmware fw;
             try
@@ -698,11 +662,18 @@ namespace MissionPlanner.Utilities
 
             while (DateTime.Now < DEADLINE)
             {
+                log.Info(DateTime.Now.Millisecond + " get Ports ");
                 string[] allports = SerialPort.GetPortNames();
 
-                foreach (string port in allports)
+                var foundboard = false;
+                var result = false;
+                Uploader uploader = null;
+
+                Parallel.ForEach(allports, (port,state) =>
                 {
                     log.Info(DateTime.Now.Millisecond + " Trying Port " + port);
+
+                    Uploader up;
 
                     try
                     {
@@ -711,31 +682,53 @@ namespace MissionPlanner.Utilities
                     catch (Exception ex)
                     {
                         //System.Threading.Thread.Sleep(50);
-                        Console.WriteLine(ex.Message);
-                        continue;
+                        log.Debug(port + " " +ex.Message);
+                        return;
                     }
 
                     try
                     {
-                       // Extensions.CallWithTimeout((Action) delegate
-                       // {
-                            up.identify();
-                       // }, 50);
-                        updateProgress(-1, "Identify");
-                        log.InfoFormat("Found board type {0} brdrev {1} blrev {2} fwmax {3} chip {5:X} chipdes {6} on {4}", up.board_type,
-                        up.board_rev, up.bl_rev, up.fw_maxsize, port, up.chip, up.chip_desc);
+                        if (state.ShouldExitCurrentIteration)
+                        {
+                            up.close();
+                            return;
+                        }
+
+                        log.Info(DateTime.Now.Millisecond + " Trying identify " + port);
+                        up.identify();
+
+                        if (state.ShouldExitCurrentIteration)
+                        {
+                            up.close();
+                            return;
+                        }
+
+                        updateProgress(-1, port + " Identify");
+                        log.InfoFormat(
+                            "Found board type {0} brdrev {1} blrev {2} fwmax {3} chip {5:X} chipdes {6} on {4}",
+                            up.board_type,
+                            up.board_rev, up.bl_rev, up.fw_maxsize, port, up.chip, up.chip_desc);
 
                         up.ProgressEvent += new Uploader.ProgressEventHandler(up_ProgressEvent);
                         up.LogEvent += new Uploader.LogEventHandler(up_LogEvent);
+                        up.identify();
+                        state.Break();
+                        foundboard = true;
+                        uploader = up;
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        Console.WriteLine("Not There..");
-                        //Console.WriteLine(ex.Message);
+                        log.Debug(port + " Not There.. " + ex.Message);
                         up.close();
-                        continue;
+                        return;
                     }
+                });
 
+                log.Info(DateTime.Now.Millisecond + " Portscan done found:" + foundboard);
+                Application.DoEvents();
+
+                if (foundboard)
+                {
                     updateProgress(-1, "Connecting");
 
                     // test if pausing here stops - System.TimeoutException: The write timed out.
@@ -743,27 +736,29 @@ namespace MissionPlanner.Utilities
 
                     try
                     {
-                        up.currentChecksum(fw);
+                        uploader.currentChecksum(fw);
                     }
                     catch (IOException ex)
                     {
                         log.Error(ex);
                         CustomMessageBox.Show("lost communication with the board.", "lost comms");
-                        up.close();
+                        uploader.close();
+                        result = false;
                         return false;
                     }
                     catch
                     {
-                        up.__reboot();
-                        up.close();
+                        uploader.__reboot();
+                        uploader.close();
                         CustomMessageBox.Show(Strings.NoNeedToUpload);
+                        result = true;
                         return true;
                     }
 
                     try
                     {
                         updateProgress(0, "Upload");
-                        up.upload(fw);
+                        uploader.upload(fw);
                         updateProgress(100, "Upload Done");
                     }
                     catch (Exception ex)
@@ -771,14 +766,16 @@ namespace MissionPlanner.Utilities
                         updateProgress(0, "ERROR: " + ex.Message);
                         log.Info(ex);
                         Console.WriteLine(ex.ToString());
+                        result = false;
                         return false;
                     }
                     finally
                     {
-                        up.close();
+                        uploader.close();
                     }
 
-                    return true;
+                    result = true;
+                    return result;
                 }
             }
 
@@ -820,7 +817,7 @@ namespace MissionPlanner.Utilities
             {
                 try
                 {
-                    if (task.Wait(TimeSpan.FromSeconds(3)) && task.Result == true)
+                    if (task.Wait(TimeSpan.FromSeconds(3)) && task.GetAwaiter().GetResult() == true)
                         return;
                     else
                     {

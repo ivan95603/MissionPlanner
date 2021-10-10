@@ -26,6 +26,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             InitializeComponent();
             CMB_Layout.Items.Add(DisplayNames.Basic);
             CMB_Layout.Items.Add(DisplayNames.Advanced);
+            CMB_Layout.Items.Add(DisplayNames.Custom);
 
             txt_log_dir.TextChanged += OnLogDirTextChanged;
 
@@ -44,11 +45,20 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             {
                 CMB_Layout.SelectedIndex = 0;
             }
+            else if (MainV2.DisplayConfiguration.displayName == DisplayNames.Custom)
+            {
+                CMB_Layout.SelectedIndex = 2;
+            }
             else
             {
                 CMB_Layout.SelectedIndex = 0;
             }
 
+            if (!MainV2.DisplayConfiguration.displayPlannerLayout)
+            {
+                label5.Visible = false;
+                CMB_Layout.Visible = false;
+            }
 
             CMB_osdcolor.DataSource = Enum.GetNames(typeof(KnownColor));
 
@@ -175,7 +185,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 if (Settings.Instance["video_device"] != null)
                 {
                     CMB_videosources_Click(this, null);
-                    CMB_videosources.SelectedIndex = Settings.Instance.GetInt32("video_device");
+                    var device = Settings.Instance.GetInt32("video_device");
+                    if(CMB_videosources.Items.Count > device)
+                        CMB_videosources.SelectedIndex = device;
 
                     if (Settings.Instance["video_options"] != "" && CMB_videosources.Text != "")
                     {
@@ -924,7 +936,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         private void but_AAsignin_Click(object sender, EventArgs e)
         {
+#if !LIB
             new Utilities.AltitudeAngel.AASettings().Show(this);
+#endif
         }
 
         private void CMB_Layout_SelectedIndexChanged(object sender, EventArgs e)
@@ -936,6 +950,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             else if ((DisplayNames)CMB_Layout.SelectedItem == DisplayNames.Basic)
             {
                 MainV2.DisplayConfiguration = MainV2.DisplayConfiguration.Basic();
+            }
+            else if ((DisplayNames)CMB_Layout.SelectedItem == DisplayNames.Custom)
+            {
+                MainV2.DisplayConfiguration = MainV2.DisplayConfiguration.Custom();
             }
             Settings.Instance["displayview"] = MainV2.DisplayConfiguration.ConvertToString();
         }

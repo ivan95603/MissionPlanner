@@ -144,8 +144,11 @@ namespace MissionPlanner.Utilities
 
                 this.raw = _answer;
 
-                // check we have data
-                if (_answer.Length > 0)
+                if (_answer == null)
+                {
+                    this.raw = new object[0];
+                } 
+                else if (_answer.Length > 0) // check we have data
                 {
                     // check this is a gps message and we dont have the current gpsstarttime
                     if (parent.gpsstarttime == DateTime.MinValue && msgtype.StartsWith("GPS"))
@@ -442,7 +445,7 @@ namespace MissionPlanner.Utilities
         // last time of message
         DateTime lasttime = DateTime.MinValue;
         // first valid gpstime
-        DateTime gpsstarttime = DateTime.MinValue;
+        public DateTime gpsstarttime { get; internal set; } = DateTime.MinValue;
 
         long msoffset = 0;
 
@@ -685,7 +688,7 @@ namespace MissionPlanner.Utilities
         {
             DateTime last = DateTime.MaxValue;
 
-            foreach (var dfItem in logdata.GetEnumeratorType(new string[] { "GPS","GPS2"}))
+            foreach (var dfItem in logdata.GetEnumeratorType(new string[] { "GPS","GPS2","POS"}))
             {
                 // always forwards
                 if (dfItem.time >= p1)

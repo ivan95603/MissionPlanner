@@ -1,16 +1,70 @@
-﻿using System;
-using System.Text;
-using System.Collections;
-using System.CodeDom;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CSharp;
+using MissionPlanner.Utilities;
+using System;
+using System.CodeDom;
 using System.CodeDom.Compiler;
-using System.Reflection;
+using System.Collections;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace MissionPlanner
 {
+    public static class CodeGenRoslyn
+    {
+        public static Assembly BuildCode(string filepath)
+        {
+            var syntaxTree =
+                CSharpSyntaxTree.ParseText(File.ReadAllText(filepath, Encoding.UTF8), path: filepath,
+                    encoding: Encoding.UTF8);
+            var assemblyName = Path.GetFileNameWithoutExtension(filepath); //Guid.NewGuid().ToString();
+
+            var refs = AppDomain.CurrentDomain.GetAssemblies();
+            var refFiles = refs.Where(a =>
+                    !a.IsDynamic && !a.FullName.Contains("MissionPlanner.Drawing"))
+                .Select(a => a.Location);
+            var refmeta = refFiles.Select(a =>
+            {
+                try
+                {
+                    if (a == "" || !File.Exists(a))
+                        return null;
+                    return AssemblyMetadata.CreateFromFile(a).GetReference();
+                }
+                catch
+                {
+                    return null;
+                }
+            }).Where(a => a != null).ToArray();
+
+            CSharpCompilation compilation = CSharpCompilation.Create(
+                assemblyName,
+                new[] {syntaxTree}, refmeta,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+            using (var dllStream = new MemoryStream())
+            using (var pdbStream = new MemoryStream())
+            {
+                var emitResult = compilation.Emit(dllStream, pdbStream);
+                if (!emitResult.Success)
+                {
+                    // emitResult.Diagnostics
+                    emitResult.Diagnostics.ForEach(a => Console.WriteLine("CodeGenRoslyn " + Path.GetFileName(filepath) + ": {0}", a.ToString()));
+                }
+                else
+                {
+                    return Assembly.Load(dllStream.ToArray(), pdbStream.ToArray());
+                }
+
+                return null;
+            }
+        }
+    }
+
     public static class CodeGen
     {
         public static object runCode(string code)
@@ -61,7 +115,7 @@ namespace MissionPlanner
         public static CompilerParameters CreateCompilerParameters()
         {
             var refs = AppDomain.CurrentDomain.GetAssemblies();
-            var refFiles = refs.Where(a => !a.IsDynamic && !a.FullName.Contains("mscorlib"))
+            var refFiles = refs.Where(a => !a.IsDynamic && !a.FullName.Contains("mscorlib") && !a.FullName.Contains("MissionPlanner.Drawing"))
                 .Select(a => a.Location);
 
             //add compiler parameters and assembly references
@@ -95,7 +149,7 @@ namespace MissionPlanner
             if (results.Errors.Count > 0)
             {
                 foreach (CompilerError error in results.Errors)
-                    Console.WriteLine("Compile Error: Line: " + error.Line + ":" + error.Column + " " + error.ErrorText);
+                    Console.WriteLine("CodeGen: Compile Error: Line: " + error.Line + ":" + error.Column + " " + error.ErrorText);
                 return null;
             }
 
@@ -114,10 +168,18 @@ namespace MissionPlanner
             //Do we have any compiler errors?
             if (results.Errors.Count > 0)
             {
+                bool iserror = false;
                 foreach (CompilerError error in results.Errors)
-                    Console.WriteLine("Compile Error: Line: " + error.Line + ":" + error.Column + " " +
+                {
+                    Console.WriteLine("CodeGen Compile " + Path.GetFileName(filename) + ": " + (error.IsWarning ? "Warning" : "Error") + ": Line: " + error.Line +
+                                      ":" + error.Column + " " +
                                       error.ErrorText);
-                return null;
+                    if (!error.IsWarning)
+                        iserror = true;
+                }
+
+                if(iserror)
+                    return null;
             }
 
             return results;

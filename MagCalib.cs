@@ -305,7 +305,7 @@ namespace MissionPlanner
 
         public static async Task test()
         {
-            getOffsets(@"C:\Users\michael\Downloads\2017-12-03 19-26-47.tlog");
+            await getOffsets(@"C:\Users\michael\Downloads\2017-12-03 19-26-47.tlog");
 
             CompassCalibrator com = new CompassCalibrator();
 
@@ -511,15 +511,21 @@ namespace MissionPlanner
                     lastlsq = DateTime.Now;
                     lock (_locker)
                     {
-                        var lsq = MagCalib.LeastSq(datacompass1, false);
-                        // simple validation
-                        if (Math.Abs(lsq[0]) < 999)
+                        try
                         {
-                            centre = new Vector3(lsq[0], lsq[1], lsq[2]);
-                            log.Info("new centre " + centre.ToString());
+                            var lsq = MagCalib.LeastSq(datacompass1, false);
+                            // simple validation
+                            if (Math.Abs(lsq[0]) < 999)
+                            {
+                                centre = new Vector3(lsq[0], lsq[1], lsq[2]);
+                                log.Info("new centre " + centre.ToString());
 
-                            prsphere.sphere1.CenterPoint = new OpenTK.Vector3(
-                                (float)centre.x, (float)centre.y, (float)centre.z);
+                                prsphere.sphere1.CenterPoint = new Vector3(
+                                    (float) centre.x, (float) centre.y, (float) centre.z);
+                            }
+                        }
+                        catch
+                        {
                         }
                     }
                 }
@@ -530,15 +536,21 @@ namespace MissionPlanner
                     lastlsq2 = DateTime.Now;
                     lock (_locker)
                     {
-                        var lsq = MagCalib.LeastSq(datacompass2, false);
-                        // simple validation
-                        if (Math.Abs(lsq[0]) < 999)
+                        try
                         {
-                            Vector3 centre2 = new Vector3(lsq[0], lsq[1], lsq[2]);
-                            log.Info("new centre2 " + centre2.ToString());
+                            var lsq = MagCalib.LeastSq(datacompass2, false);
+                            // simple validation
+                            if (Math.Abs(lsq[0]) < 999)
+                            {
+                                Vector3 centre2 = new Vector3(lsq[0], lsq[1], lsq[2]);
+                                log.Info("new centre2 " + centre2.ToString());
 
-                            prsphere.sphere2.CenterPoint = new OpenTK.Vector3(
-                                (float)centre2.x, (float)centre2.y, (float)centre2.z);
+                                prsphere.sphere2.CenterPoint = new Vector3(
+                                    (float) centre2.x, (float) centre2.y, (float) centre2.z);
+                            }
+                        }
+                        catch
+                        {
                         }
                     }
                 }
@@ -549,15 +561,21 @@ namespace MissionPlanner
                     lastlsq3 = DateTime.Now;
                     lock (_locker)
                     {
-                        var lsq = MagCalib.LeastSq(datacompass3, false);
-                        // simple validation
-                        if (Math.Abs(lsq[0]) < 999)
+                        try
                         {
-                            Vector3 centre3 = new Vector3(lsq[0], lsq[1], lsq[2]);
-                            log.Info("new centre2 " + centre3.ToString());
+                            var lsq = MagCalib.LeastSq(datacompass3, false);
+                            // simple validation
+                            if (Math.Abs(lsq[0]) < 999)
+                            {
+                                Vector3 centre3 = new Vector3(lsq[0], lsq[1], lsq[2]);
+                                log.Info("new centre2 " + centre3.ToString());
 
-                            prsphere.sphere3.CenterPoint = new OpenTK.Vector3(
-                                (float)centre3.x, (float)centre3.y, (float)centre3.z);
+                                prsphere.sphere3.CenterPoint = new Vector3(
+                                    (float) centre3.x, (float) centre3.y, (float) centre3.z);
+                            }
+                        }
+                        catch
+                        {
                         }
                     }
                 }
@@ -571,7 +589,7 @@ namespace MissionPlanner
                 lastcount = datacompass1.Count;
 
                 // add to sphere with center correction
-                prsphere.sphere1.AddPoint(new OpenTK.Vector3(rawmx, rawmy, rawmz));
+                prsphere.sphere1.AddPoint(new Vector3(rawmx, rawmy, rawmz));
                 prsphere.sphere1.AimClear();
 
                 if (datacompass2.Count > 30)
@@ -580,7 +598,7 @@ namespace MissionPlanner
                     float raw2my = datacompass2[datacompass2.Count - 1].Item2;
                     float raw2mz = datacompass2[datacompass2.Count - 1].Item3;
 
-                    prsphere.sphere2.AddPoint(new OpenTK.Vector3(raw2mx, raw2my, raw2mz));
+                    prsphere.sphere2.AddPoint(new Vector3(raw2mx, raw2my, raw2mz));
                     prsphere.sphere2.AimClear();
                 }
 
@@ -590,7 +608,7 @@ namespace MissionPlanner
                     float raw3my = datacompass3[datacompass3.Count - 1].Item2;
                     float raw3mz = datacompass3[datacompass3.Count - 1].Item3;
 
-                    prsphere.sphere3.AddPoint(new OpenTK.Vector3(raw3mx, raw3my, raw3mz));
+                    prsphere.sphere3.AddPoint(new Vector3(raw3mx, raw3my, raw3mz));
                     prsphere.sphere3.AimClear();
                 }
 
@@ -605,8 +623,9 @@ namespace MissionPlanner
                 for (int i = 0; i < datacompass1.Count; i++)
                 {
                     point = new Vector3(datacompass1[i].Item1, datacompass1[i].Item2, datacompass1[i].Item3);
-                    radius += (float)(point + centre).length();
+                    radius += (float) (point + centre).length();
                 }
+
                 radius /= datacompass1.Count;
 
                 //test that we can find one point near a set of points all around the sphere surface
@@ -624,9 +643,9 @@ namespace MissionPlanner
                         double phi = (2 * Math.PI * i) / factor2;
 
                         Vector3 point_sphere = new Vector3(
-                            (float)(Math.Sin(theta) * Math.Cos(phi) * radius),
-                            (float)(Math.Sin(theta) * Math.Sin(phi) * radius),
-                            (float)(Math.Cos(theta) * radius)) - centre;
+                            (float) (Math.Sin(theta) * Math.Cos(phi) * radius),
+                            (float) (Math.Sin(theta) * Math.Sin(phi) * radius),
+                            (float) (Math.Cos(theta) * radius)) - centre;
 
                         //log.InfoFormat("magcalib check - {0} {1} dist {2}", theta * MathHelper.rad2deg, phi * MathHelper.rad2deg, max_distance);
 
@@ -642,19 +661,22 @@ namespace MissionPlanner
                                 break;
                             }
                         }
+
                         // draw them all
                         //((ProgressReporterSphere)sender).sphere1.AimFor(new OpenTK.Vector3((float)point_sphere.x, (float)point_sphere.y, (float)point_sphere.z));
                         if (!found)
                         {
                             displayresult = "more data needed Aim For " +
-                                            GetColour((int)(theta * MathHelper.rad2deg), (int)(phi * MathHelper.rad2deg));
-                            prsphere.sphere1.AimFor(new OpenTK.Vector3((float)point_sphere.x,
-                                (float)point_sphere.y, (float)point_sphere.z));
+                                            GetColour((int) (theta * MathHelper.rad2deg),
+                                                (int) (phi * MathHelper.rad2deg));
+                            prsphere.sphere1.AimFor(new Vector3((float) point_sphere.x,
+                                (float) point_sphere.y, (float) point_sphere.z));
                             //j = factor;
                             //break;
                         }
                     }
                 }
+
                 extramsg = displayresult;
 
                 //Console.WriteLine("3 "+ DateTime.Now.Millisecond);
@@ -1175,7 +1197,14 @@ namespace MissionPlanner
 
             var t1 = new alglib.ndimensional_fvec(fitalgo);
 
-            alglib.minlmoptimize(state, t1, null, data);
+            try
+            {
+                alglib.minlmoptimize(state, t1, null, data);
+            }
+            catch
+            {
+
+            }
 
             alglib.minlmresults(state, out x, out rep);
 
@@ -1241,7 +1270,7 @@ namespace MissionPlanner
                     MainV2.comPort.setParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_LEARN", 0);
 
                     if (
-                        !MainV2.comPort.SetSensorOffsets(MAVLinkInterface.sensoroffsetsenum.magnetometer, (float)ofs[0],
+                        !MainV2.comPort.SetSensorOffsets((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, MAVLinkInterface.sensoroffsetsenum.magnetometer, (float)ofs[0],
                             (float)ofs[1], (float)ofs[2]))
                     {
                         // set values
@@ -1252,9 +1281,9 @@ namespace MissionPlanner
                     else
                     {
                         // Need to reload these params into the param list if SetSensorOffsets() was used
-                        MainV2.comPort.GetParam("COMPASS_OFS_X");
-                        MainV2.comPort.GetParam("COMPASS_OFS_Y");
-                        MainV2.comPort.GetParam("COMPASS_OFS_Z");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS_X");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS_Y");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS_Z");
                     }
 
                     if (ofs.Length > 5 && MainV2.comPort.MAV.param.ContainsKey("COMPASS_DIA_X"))
@@ -1297,7 +1326,7 @@ namespace MissionPlanner
                     MainV2.comPort.setParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_LEARN", 0);
 
                     if (
-                        !MainV2.comPort.SetSensorOffsets(MAVLinkInterface.sensoroffsetsenum.second_magnetometer,
+                        !MainV2.comPort.SetSensorOffsets((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, MAVLinkInterface.sensoroffsetsenum.second_magnetometer,
                             (float)ofs[0], (float)ofs[1], (float)ofs[2]))
                     {
                         // set values
@@ -1308,9 +1337,9 @@ namespace MissionPlanner
                     else
                     {
                         // Need to reload these params into the param list if SetSensorOffsets() was used
-                        MainV2.comPort.GetParam("COMPASS_OFS2_X");
-                        MainV2.comPort.GetParam("COMPASS_OFS2_Y");
-                        MainV2.comPort.GetParam("COMPASS_OFS2_Z");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS2_X");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS2_Y");
+                        MainV2.comPort.GetParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "COMPASS_OFS2_Z");
                     }
                     if (ofs.Length > 5 && MainV2.comPort.MAV.param.ContainsKey("COMPASS_DIA2_X"))
                     {

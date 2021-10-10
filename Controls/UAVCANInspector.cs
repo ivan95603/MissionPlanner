@@ -1,9 +1,13 @@
-﻿using MissionPlanner.Utilities;
+﻿using Microsoft.Diagnostics.Runtime.Interop;
+using MissionPlanner.Utilities;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using UAVCAN;
@@ -21,6 +25,7 @@ namespace MissionPlanner.Controls
         private PacketInspector<(UAVCAN.CANFrame frame, object message)>
             pktinspect = new PacketInspector<(UAVCAN.CANFrame, object)>();
         private MyButton but_graphit;
+        private MyButton but_subscribe;
         private UAVCAN.uavcan can;
 
         public UAVCANInspector(UAVCAN.uavcan can)
@@ -45,7 +50,7 @@ namespace MissionPlanner.Controls
 
         private void Can_MessageReceived(UAVCAN.CANFrame frame, object msg, byte transferID)
         {
-            pktinspect.Add(frame.SourceNode, 0, frame.MsgTypeID, (frame, msg), 0);
+            pktinspect.Add(frame.SourceNode, 0, frame.MsgTypeID, (frame, msg), frame.SizeofEntireMsg);
         }
 
         public new void Update()
@@ -57,7 +62,6 @@ namespace MissionPlanner.Controls
             foreach (var uavcanMessage in pktinspect.GetPacketMessages())
             {
                 TreeNode sysidnode;
-                TreeNode compidnode;
                 TreeNode msgidnode;
 
                 var sysidnodes = treeView1.Nodes.Find(uavcanMessage.frame.SourceNode.ToString(), false);
@@ -71,37 +75,31 @@ namespace MissionPlanner.Controls
                     added = true;
                 }
                 else
-                    sysidnode = sysidnodes.First();
-
-                var compidnodes = sysidnode.Nodes.Find(0.ToString(), false);
-                if (compidnodes.Length == 0)
                 {
-                    compidnode = new TreeNode("Comp " + 0)
-                    {
-                        Name = 0.ToString()
-                    };
-                    sysidnode.Nodes.Add(compidnode);
-                    added = true;
+                    sysidnode = sysidnodes.First();
+                    sysidnode.Text = "ID " + uavcanMessage.frame.SourceNode + " - " + can.GetNodeName(uavcanMessage.frame.SourceNode) + " " + pktinspect
+                        .SeenBps(uavcanMessage.frame.SourceNode, 0)
+                        .ToString("~0Bps");
                 }
-                else
-                    compidnode = compidnodes.First();
 
-                var msgidnodes = compidnode.Nodes.Find(uavcanMessage.frame.MsgTypeID.ToString(), false);
+                var msgidnodes = sysidnode.Nodes.Find(uavcanMessage.frame.MsgTypeID.ToString(), false);
                 if (msgidnodes.Length == 0)
                 {
                     msgidnode = new TreeNode(uavcanMessage.frame.MsgTypeID.ToString())
                     {
                         Name = uavcanMessage.frame.MsgTypeID.ToString()
                     };
-                    compidnode.Nodes.Add(msgidnode);
+                    sysidnode.Nodes.Add(msgidnode);
                     added = true;
                 }
                 else
                     msgidnode = msgidnodes.First();
 
+                var seenrate = (pktinspect.SeenRate(uavcanMessage.frame.SourceNode, 0, uavcanMessage.frame.MsgTypeID));
+
                 var msgidheader = uavcanMessage.message.GetType().Name + " (" +
-                                  (pktinspect.SeenRate(uavcanMessage.frame.SourceNode, 0, uavcanMessage.frame.MsgTypeID))
-                                  .ToString("0.0 Hz") + ", #" + uavcanMessage.frame.MsgTypeID + ") ";
+                                  seenrate.ToString("0.0 Hz") + ", #" + uavcanMessage.frame.MsgTypeID + ") " +
+                                  pktinspect.SeenBps(uavcanMessage.frame.SourceNode, 0, uavcanMessage.frame.MsgTypeID).ToString("~0Bps");
 
                 if (msgidnode.Text != msgidheader)
                     msgidnode.Text = msgidheader;
@@ -120,13 +118,11 @@ namespace MissionPlanner.Controls
 
         private static void PopulateMSG(FieldInfo[] Fields, TreeNode MsgIdNode, object message)
         {
-            bool added;
             foreach (var field in Fields)
             {
                 if (!MsgIdNode.Nodes.ContainsKey(field.Name))
                 {
-                    MsgIdNode.Nodes.Add(new TreeNode() { Name = field.Name });
-                    added = true;
+                    MsgIdNode.Nodes.Add(new TreeNode() {Name = field.Name});
                 }
 
                 object value = field.GetValue(message);
@@ -154,9 +150,40 @@ namespace MissionPlanner.Controls
                     {
                         value = ASCIIEncoding.ASCII.GetString((byte[])value2);
                     }
-                    else
+                    else if (value2.Length > 0)
                     {
+                        if (field.FieldType.IsClass)
+                        {
+                            var elementtype = field.FieldType.GetElementType();
+                            var fields = elementtype.GetFields();
+
+                            if (!elementtype.IsPrimitive)
+                            {
+                                MsgIdNode.Nodes[field.Name].Text = field.Name;
+                                int a = 0;
+                                foreach (var valuei in value2)
+                                {
+                                    var name = field.Name + "[" + a.ToString() + "]" ;
+                                    if (!MsgIdNode.Nodes[field.Name].Nodes.ContainsKey(name))
+                                    {
+                                        MsgIdNode.Nodes[field.Name].Nodes.Add(new TreeNode()
+                                        {
+                                            Name = name,
+                                            Text = name
+                                        });
+                                    }
+
+                                    PopulateMSG(fields, MsgIdNode.Nodes[field.Name].Nodes[name], valuei);
+                                    a++;
+                                }
+                                continue;
+                            }
+                        }
                         value = value2.Cast<object>().Aggregate((a, b) => a + "," + b);
+                    } 
+                    else if (value2.Length == 0)
+                    {
+                        value = null;
                     }
                 }
 
@@ -166,7 +193,7 @@ namespace MissionPlanner.Controls
                     PopulateMSG(field.FieldType.GetFields(), MsgIdNode.Nodes[field.Name], value);
                     continue;
                 }
-
+                
                 MsgIdNode.Nodes[field.Name].Text = (String.Format("{0,-32} {1,20} {2,-20}", field.Name, value,
                     field.FieldType.Name));
             }
@@ -179,13 +206,14 @@ namespace MissionPlanner.Controls
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
             this.but_graphit = new MissionPlanner.Controls.MyButton();
+            this.but_subscribe = new MissionPlanner.Controls.MyButton();
             this.groupBox1.SuspendLayout();
             this.SuspendLayout();
             // 
             // treeView1
             // 
             this.treeView1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.treeView1.Font = new System.Drawing.Font("Courier New", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.treeView1.Font = new System.Drawing.Font("Courier New", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.treeView1.Location = new System.Drawing.Point(3, 16);
             this.treeView1.Name = "treeView1";
             this.treeView1.Size = new System.Drawing.Size(693, 259);
@@ -195,8 +223,8 @@ namespace MissionPlanner.Controls
             // 
             // groupBox1
             // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.treeView1);
             this.groupBox1.Location = new System.Drawing.Point(0, 30);
@@ -220,9 +248,20 @@ namespace MissionPlanner.Controls
             this.but_graphit.UseVisualStyleBackColor = true;
             this.but_graphit.Click += new System.EventHandler(this.but_graphit_Click);
             // 
+            // but_subscribe
+            // 
+            this.but_subscribe.Location = new System.Drawing.Point(93, 3);
+            this.but_subscribe.Name = "but_subscribe";
+            this.but_subscribe.Size = new System.Drawing.Size(75, 23);
+            this.but_subscribe.TabIndex = 5;
+            this.but_subscribe.Text = "Subscribe";
+            this.but_subscribe.UseVisualStyleBackColor = true;
+            this.but_subscribe.Click += new System.EventHandler(this.but_subscribe_Click);
+            // 
             // UAVCANInspector
             // 
             this.ClientSize = new System.Drawing.Size(698, 311);
+            this.Controls.Add(this.but_subscribe);
             this.Controls.Add(this.but_graphit);
             this.Controls.Add(this.groupBox1);
             this.Name = "UAVCANInspector";
@@ -283,7 +322,7 @@ namespace MissionPlanner.Controls
             }
         }
 
-        private (string msgid, string name) selectedmsgid;
+        private string selectedmsgid;
 
         private void treeView1_AfterSelect(object sender, TreeViewEventArgs e)
         {
@@ -291,14 +330,22 @@ namespace MissionPlanner.Controls
                 return;
 
             int throwaway = 0;
-            if (int.TryParse(e.Node.Parent.Name, out throwaway))
+            //if (int.TryParse(e.Node.Parent.Name, out throwaway))
             {
-                selectedmsgid = (e.Node.Parent.Name, e.Node.Name);
+                selectedmsgid = e.Node.Name;
+                var current = e.Node.Parent;
+                while (current != null)
+                {
+                    selectedmsgid = current.Name + "/" + selectedmsgid;
+                    current = current.Parent;
+                }
+
                 but_graphit.Enabled = true;
+                but_subscribe.Enabled = true;
             }
-            else
+            //else
             {
-                but_graphit.Enabled = false;
+               // but_graphit.Enabled = false;
             }
         }
 
@@ -309,23 +356,13 @@ namespace MissionPlanner.Controls
             InputBox.Show("Points", "Points of history?", ref history);
             var form = new Form() { Size = new Size(640, 480) };
             var zg1 = new ZedGraphControl() { Dock = DockStyle.Fill };
-            var msgid = int.Parse(selectedmsgid.msgid);
-            var msgidfield = selectedmsgid.name;
+            var msgpath = selectedmsgid.Split('/');
+            var nodeid = int.Parse(msgpath[0]);
+            var msgid = int.Parse(msgpath[1]);
+            var path = msgpath.Skip(2);
+            var msgidfield = msgpath.Last();
             var line = new LineItem(msgidfield, new RollingPointPairList(history), Color.Red, SymbolType.None);
             zg1.GraphPane.Title.Text = "";
-            try
-            {
-                var msginfo = uavcan.MSG_INFO.First(a => a.Item2 == msgid);
-                var typeofthing = msginfo.Item1.GetField(
-                    msgidfield);
-                if (typeofthing != null)
-                {
-                    var attrib = typeofthing.GetCustomAttributes(false).OfType<MAVLink.Units>().ToArray();
-                    if (attrib.Length > 0)
-                        zg1.GraphPane.YAxis.Title.Text = attrib.OfType<MAVLink.Units>().First().Unit;
-                }
-            }
-            catch { }
 
             zg1.GraphPane.CurveList.Add(line);
 
@@ -337,8 +374,55 @@ namespace MissionPlanner.Controls
             var timer = new Timer() { Interval = 100 };
             uavcan.MessageRecievedDel msgrecv = (frame, msg, id) =>
             {
-                line.AddPoint(new XDate(DateTime.Now),
-                    (double)(dynamic)msg.GetPropertyOrField(msgidfield));
+                if (frame.SourceNode == nodeid && frame.MsgTypeID == msgid)
+                {
+                    object data = msg;
+                    foreach (var subpath in path)
+                    {
+                        // array member
+                        if (subpath.Contains("["))
+                        {
+                            var count = subpath.Split('[', ']');
+                            var index = int.Parse(count[1]);
+                            data = ((IList) data)[index];
+                            continue;
+                        }
+                        var field = data.GetType().GetField(subpath);
+                        data = field.GetValue(data);
+                    }
+
+                    var item = data;
+
+                    if (item.GetType().IsClass && !item.GetType().IsArray)
+                    {
+                        var items = data.GetType().GetFields();
+                        var dict = items.ToDictionary(ks => ks.Name, es => es.GetValue(item));
+
+                        zg1.GraphPane.CurveList.Remove(line);
+
+                        int a = 0;
+                        foreach (var newitem in dict)
+                        {
+                            var label = msgidfield + "." + newitem.Key;
+                            var lines = zg1.GraphPane.CurveList.Where(ci =>
+                                ci.Label.Text == label || ci.Label.Text.StartsWith(label + " "));
+                            if (lines.Count() == 0)
+                            {
+                                line = new LineItem(label, new RollingPointPairList(history), color[a % color.Length],
+                                    SymbolType.None);
+                                zg1.GraphPane.CurveList.Add(line);
+                            }
+                            else
+                                line = (LineItem) lines.First();
+                            
+                            AddToGraph(newitem.Value, zg1, newitem.Key, line);
+                            a++;
+                        }
+                        return;
+                    }
+
+                    AddToGraph(item, zg1, msgidfield, line);
+                }
             };
             can.MessageReceived += msgrecv;
             timer.Tick += (o, args) =>
@@ -357,6 +441,54 @@ namespace MissionPlanner.Controls
             form.Show(this);
             timer.Start();
             but_graphit.Enabled = false;
+        }
+
+        Color[] color = new Color[]
+            {Color.Red, Color.Green, Color.Blue, Color.Black, Color.Violet, Color.Orange};
+
+        private void AddToGraph(object item, ZedGraphControl zg1, string msgidfield, LineItem line)
+        {
+            if (item is IEnumerable)
+            {
+                int a = 0;
+                foreach (var subitem in (IEnumerable) item)
+                {
+                    if (subitem is IConvertible)
+                    {
+                        while (zg1.GraphPane.CurveList.Count < (a + 1))
+                        {
+                            zg1.GraphPane.CurveList.Add(new LineItem(msgidfield + "[" + a + "]",
+                                new RollingPointPairList(history), color[a % color.Length],
+                                SymbolType.None));
+                        }
+
+                        zg1.GraphPane.CurveList[a].AddPoint(new XDate(DateTime.Now),
+                            ((IConvertible) subitem).ToDouble(null));
+                        a++;
+                    }
+                }
+            }
+            else if (item is IConvertible)
+            {
+                line.AddPoint(new XDate(DateTime.Now),
+                    ((IConvertible) item).ToDouble(null));
+            } 
+            else if (item.GetType().IsClass)
+            {
+
+            }
+            else
+            {
+                line.AddPoint(new XDate(DateTime.Now),
+                    (double) (dynamic) item);
+            }
+        }
+
+        private void but_subscribe_Click(object sender, EventArgs e)
+        {
+            if(String.IsNullOrEmpty(selectedmsgid))
+                return;
+            new UAVCANSubscriber(can, selectedmsgid).ShowUserControl();
         }
     }
 }

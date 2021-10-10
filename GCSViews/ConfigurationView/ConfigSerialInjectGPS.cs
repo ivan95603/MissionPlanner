@@ -1,10 +1,10 @@
-﻿using Flurl.Util;
-using log4net;
+﻿using log4net;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -27,7 +27,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private static ILog log = LogManager.GetLogger(typeof(ConfigSerialInjectGPS));
 
         // serialport
-        internal static ICommsSerial comPort = new SerialPort();
+        internal static ICommsSerial comPort;
         // rtcm detection
         private static Utilities.rtcm3 rtcm3 = new Utilities.rtcm3();
         // sbp detection
@@ -42,7 +42,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private static System.Threading.Thread t12;
         private static bool threadrun = false;
         // track rtcm msg's seen
-        private static Hashtable msgseen = new Hashtable();
+        private static ConcurrentDictionary<string,int> msgseen = new ConcurrentDictionary<string, int>();
         // track bytes seen
         private static int bytes = 0;
         private static int bps = 0;
@@ -66,6 +66,17 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private string basepostlistfile = Settings.GetUserDataDirectory() + Path.DirectorySeparatorChar +
                                           "baseposlist.xml";
 
+        static ConfigSerialInjectGPS()
+        {
+            try
+            {
+                comPort = new SerialPort();
+            }
+            catch
+            {
+                comPort = new TcpSerial();
+            }
+        }
         public ConfigSerialInjectGPS()
         {
             InitializeComponent();
@@ -95,6 +106,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (Settings.Instance.ContainsKey("SerialInjectGPS_baud"))
             {
                 CMB_baudrate.Text = Settings.Instance["SerialInjectGPS_baud"];
+            }
+            else
+            {
+                CMB_baudrate.Text = "115200";
             }
             if (Settings.Instance.ContainsKey("SerialInjectGPS_SIAcc"))
             {
@@ -153,11 +168,13 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                    });
 
                 // we need to remove ctls for this system
-                while (ctls.Invoke(obs[0].sys).Count() > obs.Count)
+                //while (ctls.Invoke(obs[0].sys).Count() > obs.Count)
                {
-                   var list = ctls.Invoke(obs[0].sys);
-                   panel1.Controls.Remove(list.First());
+                   //var list = ctls.Invoke(obs[0].sys);
+                   //panel1.Controls.Remove(list.First());
                }
+
+               ctls.Invoke(obs[0].sys).ForEach((vp) => vp.Value = 0);
 
                int width = panel1.Width / panel1.Controls.OfType<VerticalProgressBar2>().Count();
 
@@ -407,12 +424,16 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             {
                 this.LogInfo("Setup UBLOX");
 
-                ubx_m8p.SetupM8P(comPort, chk_m8p_130p.Checked, chk_movingbase.Checked);
+                ubx_m8p.SetupM8P(comPort, chk_m8p_130p.Checked);
 
                 if (basepos != PointLatLngAlt.Zero)
-                    ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, false, chk_movingbase.Checked);
+                {
+                    ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, true);
 
-                CMB_baudrate.Text = "115200";
+                    ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, false);
+                }
+
+                CMB_baudrate.Text = "460800";
 
                 this.LogInfo("Setup UBLOX done");
             }
@@ -960,13 +981,40 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             }
         }
 
+        /// <summary>
+        /// Returns true if everything in the list is using the same mavlink version, else false.
+        /// </summary>
+        /// <param name="ML">The list.</param>
+        /// <returns></returns>
+        private static bool GetAreAllUsingSameMavlinkVersion(Mavlink.MAVList ML)
+        {
+            return !ML.Any(M => M.mavlinkv2 != ML.First().mavlinkv2);
+        }
+
+        /// <summary>
+        /// Returns true if the gps data can just be sent once, otherwise false.
+        /// </summary>
+        /// <param name="ML">The mav list.</param>
+        /// <returns>true if can send once, otherwise false.</returns>
+        private static bool GetCanJustSendOnce(Mavlink.MAVList ML)
+        {
+            //RTCM message has no target id so only needs to be sent once.
+            return rtcm_msg && GetAreAllUsingSameMavlinkVersion(ML);
+        }
+
         private static void sendData(byte[] data, ushort length)
         {
             foreach (var port in MainV2.Comports)
             {
+                bool CanJustSendOnce = GetCanJustSendOnce(port.MAVlist);
+
                 foreach (var MAV in port.MAVlist)
                 {
                     port.InjectGpsData(MAV.sysid, MAV.compid, data, length, rtcm_msg);
+                    if (CanJustSendOnce)
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -1014,7 +1062,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                     myGMAP1.ZoomAndCenterMarkers("base");
                 }
 
-                if (myGMAP1.Overlays[0].Markers[0].Position != MainV2.comPort.MAV.cs.MovingBase)
+                if (MainV2.comPort.MAV.cs.MovingBase != myGMAP1.Overlays[0].Markers[0].Position)
                 {
                     myGMAP1.Overlays[0].Markers[0].Position = MainV2.comPort.MAV.cs.MovingBase;
                     myGMAP1.ZoomAndCenterMarkers("base");
@@ -1035,7 +1083,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         public void Activate()
         {
             myGMAP1.MapProvider = GCSViews.FlightData.mymap.MapProvider;
-            myGMAP1.MaxZoom = 22;
+            myGMAP1.MaxZoom = 24;
             myGMAP1.Zoom = 16;
             myGMAP1.DisableFocusOnMouseEnter = true;
 
@@ -1144,8 +1192,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 {
                     ubx_m8p.SetupBasePos(comPort, basepos,
                         int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
-                        double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture), false,
-                        chk_movingbase.Checked);
+                        double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture), false);
 
                     ubx_m8p.poll_msg(comPort, 0x06, 0x71);
                 }
@@ -1220,15 +1267,17 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         {
             basepos = PointLatLngAlt.Zero;
             invalidateRTCMStatus();
-
+            updateSVINLabel(false,false,0,0,0);
             msgseen.Clear();
 
             if (comPort.IsOpen)
             {
-                ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, true, chk_movingbase.Checked);
+                ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, true);
+
+                ubx_m8p.SetupM8P(comPort, chk_m8p_130p.Checked);
 
                 ubx_m8p.SetupBasePos(comPort, basepos, int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
-                    double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture), false, chk_movingbase.Checked);
+                    double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture), false);
             }
         }
 

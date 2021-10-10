@@ -23,7 +23,6 @@ namespace MissionPlanner.Maps
 
 
         public GMapOverlay distance;
-        private readonly Thread elevation; //Map Overlay Thread
 
         public GMapOverlay elevationoverlay;
         private readonly int extend = 384; //elevation extention in pixels
@@ -60,10 +59,7 @@ namespace MissionPlanner.Maps
             distance = new GMapOverlay("distance");
             gMapControl1.Overlays.Insert(0, distance);
 
-            elevation = new Thread(elevation_calc);
-            elevation.Name = "elevation";
-            elevation.IsBackground = true;
-            elevation.Start();
+            elevation_calc();
 
             need_rf_redraw = true;
         }
@@ -119,7 +115,8 @@ namespace MissionPlanner.Maps
         {
             this.HomeLocation = HomeLocation;
             DroneLocation = Location;
-            distance.Markers.Clear();
+            if(distance.Markers.Count > 0)
+                distance.Markers.Clear();
 
             if (connected && home_kmleft)
             {
@@ -138,7 +135,7 @@ namespace MissionPlanner.Maps
             }
         }
 
-        private void elevation_calc()
+        private async void elevation_calc()
         {
             ele_enabled = true;
 
@@ -159,7 +156,7 @@ namespace MissionPlanner.Maps
                     if (center == PointLatLngAlt.Zero)
                     {
                         // center has not been set yet
-                        Thread.Sleep(100);
+                        await Task.Delay(250).ConfigureAwait(false);
                         continue;
                     }
 
@@ -215,7 +212,7 @@ namespace MissionPlanner.Maps
                                             var lnglat = gMapControl1.FromLocalToLatLng(x - extend / 2, y - extend / 2);
                                             var altresponce = srtm.getAltitude(lnglat.Lat, lnglat.Lng, zoom);
                                             if (altresponce != srtm.altresponce.Invalid &&
-                                                altresponce != srtm.altresponce.Ocean)
+                                                altresponce != srtm.altresponce.Ocean && altresponce.alt != 0)
                                             {
                                                 alts[x, y] = altresponce.alt;
 
@@ -362,7 +359,7 @@ namespace MissionPlanner.Maps
                     log.Error(ex);
                 }
 
-                Thread.Sleep(100);
+                await Task.Delay(333).ConfigureAwait(false);
             }
         }
 

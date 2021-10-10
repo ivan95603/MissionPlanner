@@ -5,6 +5,7 @@ using MissionPlanner.Controls;
 using MissionPlanner.test;
 using MissionPlanner.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -46,6 +47,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             MainV2.instance.DeviceChanged += Instance_DeviceChanged;
 
             this.Enabled = false;
+
+            flashdone = false;
 
             Task.Run(() =>
             {
@@ -90,8 +93,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             this.BeginInvoke((MethodInvoker)delegate
            {
-               imageLabel.Text = first.VehicleType?.ToString() + " " + first.MavFirmwareVersion.ToString() + " " +
-                                 first.MavFirmwareVersionType.ToString();
+               if (String.IsNullOrEmpty(first.MavFirmwareVersionStr))
+                   imageLabel.Text = first.VehicleType?.ToString() + " " + first.MavFirmwareVersion.ToString() + " " +
+                                     first.MavFirmwareVersionType.ToString();
+               else
+                   imageLabel.Text = first.VehicleType?.ToString() + " " + first.MavFirmwareVersionStr + " " +
+                                     first.MavFirmwareVersionType.ToString();
 
                this.Enabled = true;
            });
@@ -103,11 +110,16 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             // reset to official on any reload
             REL_Type = APFirmware.RELEASE_TYPES.OFFICIAL;
+
+            flashdone = false;
         }
 
         private void Instance_DeviceChanged(MainV2.WM_DEVICECHANGE_enum cause)
         {
             if (cause != MainV2.WM_DEVICECHANGE_enum.DBT_DEVICEARRIVAL)
+                return;
+
+            if (flashdone == true)
                 return;
 
             Task.Run(() =>
@@ -164,6 +176,18 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private void LookForPort(APFirmware.MAV_TYPE mavtype, bool alloptions = false)
         {
             var ports = Win32DeviceMgmt.GetAllCOMPorts();
+
+            if (ExtraDeviceInfo != null)
+            {
+                try
+                {
+                    ports.AddRange(ExtraDeviceInfo.Invoke());
+                }
+                catch
+                {
+
+                }
+            }
 
             if (alloptions)
                 ports.Add(default(ArduPilot.DeviceInfo));
@@ -292,8 +316,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
                     var uploadstarttime = DateTime.Now;
 
-                    fw.UploadFlash(deviceInfo.name, tempfile, BoardDetect.boards.pass);
+                    flashdone = true;
 
+                    fw.UploadFlash(deviceInfo.name, tempfile, BoardDetect.boards.pass);
+                    
                     var uploadtime = (DateTime.Now - uploadstarttime).TotalMilliseconds;
 
                     Tracking.AddTiming("Firmware Upload", deviceInfo.board, uploadtime, deviceInfo.description);
@@ -312,6 +338,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             return;
         }
 
+        public static Func<List<ArduPilot.DeviceInfo>> ExtraDeviceInfo;
+
         /// <summary>
         ///     for when updating fw to hardware
         /// </summary>
@@ -319,24 +347,28 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         /// <param name="status"></param>
         private void fw_Progress1(int progress, string status)
         {
-            var change = false;
-
-            if (progress != -1)
+            this.BeginInvokeIfRequired(() =>
             {
-                if (this.progress.Value != progress)
+                var change = false;
+
+                if (progress != -1)
                 {
-                    this.progress.Value = progress;
+                    if (this.progress.Value != progress)
+                    {
+                        this.progress.Value = progress;
+                        change = true;
+                    }
+                }
+
+                if (lbl_status.Text != status)
+                {
+                    lbl_status.Text = status;
                     change = true;
                 }
-            }
-            if (lbl_status.Text != status)
-            {
-                lbl_status.Text = status;
-                change = true;
-            }
 
-            if (change)
-                this.BeginInvokeIfRequired(() => { this.Refresh(); });
+                if (change)
+                    this.Refresh();
+            });
         }
 
         private void Lbl_devfw_Click(object sender, EventArgs e)
@@ -357,10 +389,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         }
 
         private string custom_fw_dir = Settings.Instance["FirmwareFileDirectory"] ?? "";
+        private bool flashdone = false;
 
         private void Lbl_Custom_firmware_label_Click(object sender, EventArgs e)
         {
-            using (var fd = new OpenFileDialog { Filter = "Firmware (*.hex;*.px4;*.vrx;*.apj)|*.hex;*.px4;*.vrx;*.apj|All files (*.*)|*.*" })
+            using (var fd = new OpenFileDialog
+                {Filter = "Firmware (*.hex;*.px4;*.vrx;*.apj)|*.hex;*.px4;*.vrx;*.apj|All files (*.*)|*.*"})
             {
                 if (Directory.Exists(custom_fw_dir))
                     fd.InitialDirectory = custom_fw_dir;
@@ -380,7 +414,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                         if (fd.FileName.ToLower().EndsWith(".px4") || fd.FileName.ToLower().EndsWith(".apj"))
                         {
                             if (solo.Solo.is_solo_alive &&
-                                CustomMessageBox.Show("Solo", "Is this a Solo?", CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes)
+                                CustomMessageBox.Show("Solo", "Is this a Solo?",
+                                    CustomMessageBox.MessageBoxButtons.YesNo) == CustomMessageBox.DialogResult.Yes)
                             {
                                 boardtype = BoardDetect.boards.solo;
                             }
@@ -391,7 +426,21 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                         }
                         else
                         {
-                            boardtype = BoardDetect.DetectBoard(MainV2.comPortName, Win32DeviceMgmt.GetAllCOMPorts());
+                            var ports = Win32DeviceMgmt.GetAllCOMPorts();
+
+                            if (ExtraDeviceInfo != null)
+                            {
+                                try
+                                {
+                                    ports.AddRange(ExtraDeviceInfo.Invoke());
+                                }
+                                catch
+                                {
+
+                                }
+                            }
+
+                            boardtype = BoardDetect.DetectBoard(MainV2.comPortName, ports);
                         }
 
                         if (boardtype == BoardDetect.boards.none)
@@ -406,7 +455,14 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                         return;
                     }
 
-                    fw.UploadFlash(MainV2.comPortName, fd.FileName, boardtype);
+                    try
+                    {
+                        fw.UploadFlash(MainV2.comPortName, fd.FileName, boardtype);
+                    }
+                    catch (Exception ex)
+                    {
+                        CustomMessageBox.Show(ex.ToString(), Strings.ERROR);
+                    }
                 }
             }
 
@@ -441,8 +497,11 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             MainV2.instance.doConnect(mav, MainV2._connectionControl.CMB_serialport.Text,
                 MainV2._connectionControl.CMB_baudrate.Text, false);
 
-            if (!mav.BaseStream.IsOpen)
+            if (mav.BaseStream == null || !mav.BaseStream.IsOpen)
+            {
+                CustomMessageBox.Show("Failed to find device on mavlink");
                 return;
+            }
 
             if (CustomMessageBox.Show("Are you sure you want to upgrade the bootloader? This can brick your board",
                     "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int)DialogResult.Yes)

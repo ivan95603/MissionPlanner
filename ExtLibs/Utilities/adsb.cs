@@ -60,9 +60,11 @@ namespace MissionPlanner.Utilities
 
             if (thisthread != null)
             {
-                thisthread.Abort();
-                thisthread.Join();
-                thisthread = null;
+                try { 
+                    thisthread.Abort();
+                    thisthread.Join();
+                    thisthread = null;
+                } catch { }
             }
 
             log.Info("adsb stopped");
@@ -1165,7 +1167,7 @@ namespace MissionPlanner.Utilities
 
             public bool DisplayICAO { get; set; }
 
-            public string CallSign { get; set; }
+            public string CallSign { get; set; } = "";
 
             public ushort Squawk { get; set; }
             

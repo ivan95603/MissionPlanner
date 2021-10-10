@@ -14,7 +14,6 @@
 @using  System.Web;
 @using  System.Net.Http.Headers;
 @using System.Security.Cryptography;
-@using Blazor.FileReader;
 @using Ionic.Zip;
 @using System.Xml.Linq;
 @using ICSharpCode.SharpZipLib.Lzw
@@ -22,11 +21,12 @@
 @using MissionPlanner.ArduPilot
 @using Newtonsoft.Json
 @using Org.BouncyCastle.Utilities.Encoders
-@using Microsoft.AspNetCore.Blazor.Services;
-@using Mono.WebAssembly.Interop;
+
 @using System.Runtime.InteropServices
 @using System.Text.RegularExpressions
+@using Microsoft.JSInterop.WebAssembly
 @using SevenZip
+@using Tewr.Blazor.FileReader
 @implements IDisposable
 @inject IFileReaderService fileReaderService;
 @inject HttpClient Http
@@ -893,7 +893,7 @@ StringToSign = VERB + "\n" +
 
             var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
 
-            var js = JSRuntime as MonoWebAssemblyJSRuntime;
+            var js = JSRuntime as WebAssemblyJSRuntime;
             js.InvokeUnmarshalled<byte[], string, bool>("filebuffer", buffer, "fileReadyDF");
         }
 

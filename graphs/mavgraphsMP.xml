@@ -1,5 +1,11 @@
 ﻿<graphs>
 
+  <graph name="Builtin/Distance From EKF Origin">
+    <expression>sqrt(XKF1.PE**2+XKF1.PN**2) sqrt(NKF1.PE**2+NKF1.PN**2) sqrt(NKF6.PE**2+NKF6.PN**2)</expression>
+    <description>
+    </description>
+  </graph>
+
   <graph name="Builtin/Velocity vs Innovation Velocity E">
     <expression>NKF1.VE NKF3.IVE:2</expression>
     <description>
@@ -90,6 +96,16 @@ Velocity comparison x
     <expression>sqrt(NKF3.IPN**2+NKF3.IPE**2) sqrt(NKF8.IPN**2+NKF8.IPE**2)</expression>
   </graph>
 
+ <graph name='Speed/GPS vs NKF1'>
+  <description></description>
+  <expression>GPS.Spd sqrt(NKF1[0].VN**2+NKF1[0].VE**2)</expression>
+  <expression>GPS.Spd sqrt(NKF1.VN**2+NKF1.VE**2)</expression>
+ </graph>
+ 
+ <graph name='Sensors/GPS/Accuracy'>
+  <description></description>
+  <expression>GPA.HAcc GPA.SAcc GPA.VAcc GPS.NSats:2</expression>
+ </graph>
 
   <graph name='Sensors/Compass/Compass vs Throttle'>
     <description>Compass vs Throttle</description>
@@ -121,5 +137,21 @@ Velocity comparison x
     <expression>BAT.Volt BAT.Curr BAT.Volt*BAT.Curr:2</expression>
   </graph>
   
+  <graph name="Builtin/Efficiency mah-KM">
+    <expression>(delta(BAT.CurrTot,'mas',GPS.TimeUS)/max(2,GPS.Spd))*1000</expression>
+    <description>mah per km</description>
+  </graph>
+  
+  <graph name="Builtin/Efficiency mah-KM-2">
+    <expression>((BAT.Curr)/(max(2,GPS.Spd)*3.6))*1000</expression>
+    <description>mah per km</description>
+  </graph>
+  <graph name="Builtin/watth-KM">
+    <expression>((BAT.Volt*BAT.Curr)/((GPS.Spd*3600)/1000))</expression>
+    <description>watth per km</description>
+  </graph>
+  <graph name="Builtin/DistDelta">
+    <expression>distance_from(GPS,GPS.Lat-diff(GPS.Lat,"Lat"),GPS.Lng-diff(GPS.Lng,"Lng"))</expression>
+    <description>    </description>
+  </graph>
 </graphs>
-

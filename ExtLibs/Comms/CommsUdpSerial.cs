@@ -55,7 +55,7 @@ namespace MissionPlanner.Comms
         public int WriteBufferSize { get; set; }
         public int WriteTimeout { get; set; }
         public bool RtsEnable { get; set; }
-        public Stream BaseStream => Stream.Null;
+        public Stream BaseStream => new UDPStream(this);
 
         public void toggleDTR()
         {
@@ -87,7 +87,7 @@ namespace MissionPlanner.Comms
         {
             get
             {
-                if (client.Client == null) return false;
+                if (client?.Client == null) return false;
                 return _isopen;
             }
             set => _isopen = value;

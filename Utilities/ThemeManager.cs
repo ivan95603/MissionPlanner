@@ -145,6 +145,13 @@ namespace MissionPlanner.Utilities
         }
     }
 
+
+    /// <summary>
+    /// An attribute which prevents the automatic theming of components
+    /// </summary>
+    public class PreventThemingAttribute : Attribute { };
+
+
     /// <summary>
     /// Helper class for the stylng 'theming' of forms and controls, and provides MessageBox
     /// replacements which are also styled
@@ -188,9 +195,9 @@ namespace MissionPlanner.Utilities
         public static ThemeColorTable thmColor;
 
         public static List<String> ThemeNames;
-        
 
-        
+
+
         public static void GetThemesList()
         {
 
@@ -206,19 +213,33 @@ namespace MissionPlanner.Utilities
                 ThemeNames.Clear();
             }
 
-            //Get default themes from program directory (system themes are read only)
-            var themeFiles = Directory.EnumerateFiles(runningDir, "*.mpsystheme");
-            foreach (string currentFile in themeFiles)
+            try
             {
-                ThemeNames.Add(Path.GetFileName(currentFile));
+                //Get default themes from program directory (system themes are read only)
+                var themeFiles = Directory.EnumerateFiles(runningDir, "*.mpsystheme");
+                foreach (string currentFile in themeFiles)
+                {
+                    ThemeNames.Add(Path.GetFileName(currentFile));
+                }
             }
-            //Get theme files from user directory (user themes can be overwritten)
-            themeFiles = Directory.EnumerateFiles(userDir, "*.mpusertheme");
-            foreach (string currentFile in themeFiles)
+            catch (Exception ex)
             {
-                ThemeNames.Add(Path.GetFileName(currentFile));
+                log.Error(ex);
             }
 
+            try
+            {
+                //Get theme files from user directory (user themes can be overwritten)
+                var themeFiles = Directory.EnumerateFiles(userDir, "*.mpusertheme");
+                foreach (string currentFile in themeFiles)
+                {
+                    ThemeNames.Add(Path.GetFileName(currentFile));
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
         }
 
 
@@ -244,7 +265,8 @@ namespace MissionPlanner.Utilities
             try
             {
                 ThemeManager.thmColor = ThemeManager.ReadFromXmlFile<ThemeColorTable>(themeFileToLoad);
-                ThemeManager.thmColor.strThemeName = strThemeName;
+                if (ThemeManager.thmColor != null)
+                    ThemeManager.thmColor.strThemeName = strThemeName;
 
             }
             catch
@@ -265,6 +287,8 @@ namespace MissionPlanner.Utilities
         }
 
 
+
+
         public static void StartThemeEditor()
         {
             new ThemeEditor().ShowDialog();
@@ -277,7 +301,8 @@ namespace MissionPlanner.Utilities
         }
 
         /// <summary>
-        /// Will recursively apply the current theme to 'control'
+        /// Will recursively apply the current theme to 'control' unless the control has the 
+        /// PreventTheming attribute
         /// </summary>
         /// <param name="control"></param>
         public static void ApplyThemeTo(Control control)
@@ -285,9 +310,35 @@ namespace MissionPlanner.Utilities
             if (control is ContainerControl)
                 ((ContainerControl)control).AutoScaleMode = AutoScaleMode.None;
 
+            if (control.GetType().IsDefined(typeof(PreventThemingAttribute)))
+                return;
+
             ApplyTheme(control, 0);
         }
 
+
+        public static Color getQvNumberColor()
+        {
+            //The mix color is set to the inverse of background color, so white background will get dark colors
+            Color mix = Color.FromArgb(ThemeManager.BGColor.ToArgb() ^ 0xffffff);
+
+            Random random = new Random();
+
+            int red = random.Next(256);
+            int green = random.Next(256);
+            int blue = random.Next(256);
+
+            // mix the color
+            if (mix != null)
+            {
+                red = (red + mix.R) / 2;
+                green = (green + mix.G) / 2;
+                blue = (blue + mix.B) / 2;
+            }
+
+            var col = Color.FromArgb(red, green, blue);
+            return col;
+        }
 
         public static void doxamlgen()
         {
@@ -1052,6 +1103,7 @@ mc:Ignorable=""d""
                     {
                         but.numberColor = Color.FromArgb((209 + mix.R) / 2, (151 + mix.G) / 2, (248 + mix.B) / 2);
                     }
+                    but.numberColorBackup = but.numberColor;
                     //return;  //return removed to process all quickView controls
                 }
                 else if (ctl.GetType() == typeof(TreeView))
@@ -1128,35 +1180,39 @@ mc:Ignorable=""d""
                 else if (ctl.GetType() == typeof(ZedGraph.ZedGraphControl))
                 {
                     var zg1 = (ZedGraph.ZedGraphControl)ctl;
-                    zg1.GraphPane.Chart.Fill = new ZedGraph.Fill(ZedGraphChartFill);
-                    zg1.GraphPane.Fill = new ZedGraph.Fill(ZedGraphPaneFill);
 
-                    foreach (ZedGraph.LineItem li in zg1.GraphPane.CurveList)
-                        li.Line.Width = 2;
+                    foreach (var GraphPane in zg1.MasterPane.PaneList)
+                    {
+                        GraphPane.Chart.Fill = new ZedGraph.Fill(ZedGraphChartFill);
+                        GraphPane.Fill = new ZedGraph.Fill(ZedGraphPaneFill);
 
-                    zg1.GraphPane.Title.FontSpec.FontColor = TextColor;
+                        foreach (ZedGraph.LineItem li in GraphPane.CurveList)
+                            li.Line.Width = 2;
 
-                    zg1.GraphPane.XAxis.MajorTic.Color = TextColor;
-                    zg1.GraphPane.XAxis.MinorTic.Color = TextColor;
-                    zg1.GraphPane.YAxis.MajorTic.Color = TextColor;
-                    zg1.GraphPane.YAxis.MinorTic.Color = TextColor;
-                    zg1.GraphPane.Y2Axis.MajorTic.Color = TextColor;
-                    zg1.GraphPane.Y2Axis.MinorTic.Color = TextColor;
+                        GraphPane.Title.FontSpec.FontColor = TextColor;
 
-                    zg1.GraphPane.XAxis.MajorGrid.Color = TextColor;
-                    zg1.GraphPane.YAxis.MajorGrid.Color = TextColor;
-                    zg1.GraphPane.Y2Axis.MajorGrid.Color = TextColor;
+                        GraphPane.XAxis.MajorTic.Color = TextColor;
+                        GraphPane.XAxis.MinorTic.Color = TextColor;
+                        GraphPane.YAxis.MajorTic.Color = TextColor;
+                        GraphPane.YAxis.MinorTic.Color = TextColor;
+                        GraphPane.Y2Axis.MajorTic.Color = TextColor;
+                        GraphPane.Y2Axis.MinorTic.Color = TextColor;
 
-                    zg1.GraphPane.YAxis.Scale.FontSpec.FontColor = TextColor;
-                    zg1.GraphPane.YAxis.Title.FontSpec.FontColor = TextColor;
-                    zg1.GraphPane.Y2Axis.Title.FontSpec.FontColor = TextColor;
-                    zg1.GraphPane.Y2Axis.Scale.FontSpec.FontColor = TextColor;
+                        GraphPane.XAxis.MajorGrid.Color = TextColor;
+                        GraphPane.YAxis.MajorGrid.Color = TextColor;
+                        GraphPane.Y2Axis.MajorGrid.Color = TextColor;
 
-                    zg1.GraphPane.XAxis.Scale.FontSpec.FontColor = TextColor;
-                    zg1.GraphPane.XAxis.Title.FontSpec.FontColor = TextColor;
+                        GraphPane.YAxis.Scale.FontSpec.FontColor = TextColor;
+                        GraphPane.YAxis.Title.FontSpec.FontColor = TextColor;
+                        GraphPane.Y2Axis.Title.FontSpec.FontColor = TextColor;
+                        GraphPane.Y2Axis.Scale.FontSpec.FontColor = TextColor;
 
-                    zg1.GraphPane.Legend.Fill = new ZedGraph.Fill(ZedGraphLegendFill);
-                    zg1.GraphPane.Legend.FontSpec.FontColor = TextColor;
+                        GraphPane.XAxis.Scale.FontSpec.FontColor = TextColor;
+                        GraphPane.XAxis.Title.FontSpec.FontColor = TextColor;
+
+                        GraphPane.Legend.Fill = new ZedGraph.Fill(ZedGraphLegendFill);
+                        GraphPane.Legend.FontSpec.FontColor = TextColor;
+                    }
                 }
                 else if (ctl.GetType() == typeof(BSE.Windows.Forms.Panel) || ctl.GetType() == typeof(SplitterPanel))
                 {

@@ -31,7 +31,7 @@ map = {
 def generate_message_header(f, xml_list):
     dedup = {}
     for xml in xml_list:
-        print "generate_message_header " + xml.basename
+        print("generate_message_header " + xml.basename)
         if xml.little_endian:
             xml.mavlink_endian = "MAVLINK_LITTLE_ENDIAN"
         else:
@@ -179,14 +179,14 @@ ${message_names_enum}
 
 
 def generate_message_enum_types(xml):
-    print "generate_message_enum_types: " + xml.filename
+    print("generate_message_enum_types: " + xml.filename)
     for m in xml.message:
         for fld in m.fields:
             if fld.array_length == 0:
                 fld.type = map[fld.type]
             if fld.enum != "" and fld.array_length == 0:
                 enumtypes[fld.enum] = fld.type
-                print fld.enum + " is type " + fld.type
+                print(fld.enum + " is type " + fld.type)
 
 def cleanText(text):
     text = text.replace("\n"," ")
@@ -194,12 +194,12 @@ def cleanText(text):
     return text.replace("\"","'")
 
 def generate_message_enums(f, xml): 
-    print "generate_message_enums: " + xml.filename
+    print("generate_message_enums: " + xml.filename)
     # add some extra field attributes for convenience with arrays
     for m in xml.enum:
         m.description = cleanText(m.description)
         m.flags = ""
-        if m.description.lower().find("bitmask") >= 0: # or m.name.lower().find("_flags") >= 0:
+        if m.description.lower().find("bitmask") >= 0 or m.name.lower().find("_flags") >= 0:
             m.flags = "[Flags]\n\t"
         m.enumtype = enumtypes.get(m.name,"int /*default*/")
         for fe in m.entry:
@@ -211,16 +211,19 @@ def generate_message_enums(f, xml):
             firstchar = re.search('^([0-9])', fe.name )
             if firstchar != None and firstchar.group():
                 fe.name = '_%s' % fe.name
+            if hasattr(fe, "deprecated") and fe.deprecated is True:
+                fe.name = '''[Obsolete]
+        %s''' % fe.name
             
     t.write(f, '''
     ${{enum:
     ///<summary> ${description} </summary>
     ${flags}public enum ${name}: ${enumtype}
     {
-        ${{entry:    ///<summary> ${description} |${{param:${description}| }} </summary>
+        ${{entry:///<summary> ${description} |${{param:${description}| }} </summary>
         [Description("${description}")]
         ${name}=${value}, 
-    }}
+        }}
     };
     }}
 ''', xml)
@@ -235,22 +238,30 @@ def generate_message_footer(f, xml):
 
 def generate_message_h(f, directory, m):
     '''generate per-message header for a XML file'''
-    t.write(f, '''
+    
+    m.obsolete = ""
+    if hasattr(m, "deprecated") and m.deprecated is True:
+        m.obsolete = "[Obsolete]"
 
+    t.write(f, '''
+    ${obsolete}
+    /// extensions_start ${extensions_start}
     [StructLayout(LayoutKind.Sequential,Pack=1,Size=${wire_length})]
     ///<summary> ${description} </summary>
     public struct mavlink_${name_lower}_t
     {
         public mavlink_${name_lower}_t(${{ordered_fields:${type} ${name},}}) 
         {
-            ${{ordered_fields:  this.${name} = ${name};
+            ${{ordered_fields:this.${name} = ${name};
             }}
         }
-${{ordered_fields:        /// <summary>${description} ${enum} ${units} ${display}</summary>
+${{ordered_fields:
+        /// <summary>${description} ${enum} ${units} ${display}</summary>
         [Units("${units}")]
         [Description("${description}")]
+        //[FieldOffset(${wire_offset})]
         ${array_prefix} ${type} ${name};
-    }}
+}}
     };
 
 ''', m)
@@ -276,6 +287,8 @@ def generate_one(fh, basename, xml):
             m.crc_extra_arg = ""
         m.msg_nameid = "MAVLINK_MSG_ID_${name} = ${id}"
         m.description = cleanText(m.description)
+        if m.extensions_start is None:
+            m.extensions_start = 0;
         for f in m.fields:
             f.description = cleanText(f.description)
             if f.array_length != 0:

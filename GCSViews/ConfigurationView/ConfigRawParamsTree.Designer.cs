@@ -98,8 +98,6 @@
             this.Params.VirtualMode = true;
             this.Params.CellEditFinishing += new BrightIdeasSoftware.CellEditEventHandler(this.Params_CellEditFinishing);
             this.Params.CellClick += new System.EventHandler<BrightIdeasSoftware.CellClickEventArgs>(this.Params_CellClick);
-            this.Params.CellOver += new System.EventHandler<BrightIdeasSoftware.CellOverEventArgs>(this.Params_CellOver);
-            this.Params.CellToolTipShowing += new System.EventHandler<BrightIdeasSoftware.ToolTipShowingEventArgs>(this.Params_CellToolTipShowing);
             this.Params.FormatRow += new System.EventHandler<BrightIdeasSoftware.FormatRowEventArgs>(this.Params_FormatRow);
             // 
             // olvColumn1
@@ -107,6 +105,7 @@
             this.olvColumn1.AspectName = "paramname";
             this.olvColumn1.CellPadding = null;
             this.olvColumn1.IsEditable = false;
+            this.olvColumn1.MinimumWidth = 160;
             resources.ApplyResources(this.olvColumn1, "olvColumn1");
             // 
             // olvColumn2
@@ -115,6 +114,7 @@
             this.olvColumn2.AutoCompleteEditor = false;
             this.olvColumn2.AutoCompleteEditorMode = System.Windows.Forms.AutoCompleteMode.None;
             this.olvColumn2.CellPadding = null;
+            this.olvColumn2.MinimumWidth = 80;
             resources.ApplyResources(this.olvColumn2, "olvColumn2");
             // 
             // olvColumn3

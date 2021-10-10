@@ -306,6 +306,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
                 processToScreen();
 
+                FilterTimerOnElapsed(null, null);
+
                 startup = false;
             }
         }
@@ -629,7 +631,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
                 try
                 {
-                    newvalue = float.Parse(e.NewValue.ToString());
+                    newvalue = float.Parse(e.NewValue.ToString().Replace(',','.'), CultureInfo.InvariantCulture);
                 }
                 catch
                 {
@@ -806,20 +808,6 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             CustomMessageBox.Show("Parameters committed to non-volatile memory");
             return;
-        }
-
-        private void Params_CellToolTipShowing(object sender, ToolTipShowingEventArgs e)
-        {
-
-
-        }
-
-        private void Params_CellOver(object sender, CellOverEventArgs e)
-        {
-            if (e.ColumnIndex == 4 || e.ColumnIndex == 5)
-            {
-                //     toolTip1.Show(e.HitTest.Item.Text, this.Parent, 3000);
-            }
         }
 
         private void chk_modified_CheckedChanged(object sender, EventArgs e)

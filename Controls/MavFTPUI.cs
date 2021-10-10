@@ -31,21 +31,35 @@ namespace MissionPlanner.Controls
             _mavftp = new MAVFtp(_mav, (byte)_mav.sysidcurrent, (byte)mav.compidcurrent);
             _mavftp.Progress += (message, percent) =>
             {
-                if (toolStripProgressBar1.Value == percent)
-                    return;
-
-                if (this.IsDisposed)
+                try
                 {
-                    _mavftp = null;
-                    return;
+                    if (toolStripProgressBar1.Value == percent)
+                        return;
+
+                    if (this.IsDisposed)
+                    {
+                        _mavftp = null;
+                        return;
+                    }
+
+                    this.BeginInvokeIfRequired(() =>
+                    {
+                        try
+                        {
+                            toolStripProgressBar1.Value = percent;
+                            toolStripStatusLabel1.Text = message;
+                            statusStrip1.Refresh();
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Error(ex);
+                        }
+                    });
                 }
-
-                this.BeginInvokeIfRequired(() =>
+                catch (Exception ex)
                 {
-                    toolStripProgressBar1.Value = percent;
-                    toolStripStatusLabel1.Text = message;
-                    statusStrip1.Refresh();
-                });
+                    log.Error(ex);
+                }
             };
             InitializeComponent();
 
@@ -57,6 +71,7 @@ namespace MissionPlanner.Controls
         private async void PopulateTreeView()
         {
             toolStripStatusLabel1.Text = "Updating Folders";
+            toolStripProgressBar1.ProgressBar.Style = ProgressBarStyle.Marquee;
 
             treeView1.BeginUpdate();
 
@@ -71,18 +86,28 @@ namespace MissionPlanner.Controls
             {
                 rootNode = new TreeNode(info.Name, 0, 0);
                 rootNode.Tag = info;
-                await GetDirectories(await info.GetDirectories().ConfigureAwait(true), rootNode).ConfigureAwait(true);
+                await PopulateDirectories(await info.GetDirectories().ConfigureAwait(true), rootNode).ConfigureAwait(true);
                 treeView1.Nodes.Add(rootNode);
             }
-
+            /*
             info = new DirectoryInfo(@"@ROMFS/", _mavftp);
             if (info.Exists)
             {
                 rootNode = new TreeNode("@ROMFS", 0, 0);
                 rootNode.Tag = info;
-                await GetDirectories(await info.GetDirectories().ConfigureAwait(true), rootNode).ConfigureAwait(true);
+                await PopulateDirectories(await info.GetDirectories().ConfigureAwait(true), rootNode).ConfigureAwait(true);
                 treeView1.Nodes.Add(rootNode);
             }
+            */
+            info = new DirectoryInfo(@"@SYS/", _mavftp);
+            if (info.Exists)
+            {
+                rootNode = new TreeNode("@SYS", 0, 0);
+                rootNode.Tag = info;
+                await PopulateDirectories(await info.GetDirectories().ConfigureAwait(true), rootNode).ConfigureAwait(true);
+                treeView1.Nodes.Add(rootNode);
+            }
+            
 
             toolStripStatusLabel1.Text = "Ready";
 
@@ -90,12 +115,14 @@ namespace MissionPlanner.Controls
             
             treeView1.EndUpdate();
 
+            toolStripProgressBar1.ProgressBar.Style = ProgressBarStyle.Blocks;
+
             treeView1.SelectedNode = rootNode;
 
             TreeView1_NodeMouseClick(this, new TreeNodeMouseClickEventArgs(rootNode, MouseButtons.Left, 1, 1, 1));
         }
 
-        private async Task GetDirectories(DirectoryInfo[] subDirs,
+        private async Task PopulateDirectories(DirectoryInfo[] subDirs,
             TreeNode nodeToAddTo)
         {
             List<TreeNode> info = new List<TreeNode>();
@@ -107,17 +134,6 @@ namespace MissionPlanner.Controls
                 aNode.ImageKey = "folder";
                 nodeToAddTo.Nodes.Add(aNode);
                 info.Add(aNode);
-            }
-
-            DirectoryInfo[] subSubDirs;
-            foreach (var treeNode in info)
-            {
-                //subSubDirs = await ((DirectoryInfo)treeNode.Tag).GetDirectories();
-                //if (subSubDirs.Length != 0)
-                {
-                    //  await GetDirectories(subSubDirs, treeNode);
-                }
-
             }
         }
 
@@ -136,7 +152,7 @@ namespace MissionPlanner.Controls
 
             newSelected.Nodes.Clear();
 
-            await GetDirectories(dirs, newSelected).ConfigureAwait(true);
+            await PopulateDirectories(dirs, newSelected).ConfigureAwait(true);
 
             foreach (DirectoryInfo dir in dirs)
             {
@@ -190,7 +206,9 @@ namespace MissionPlanner.Controls
                 get { return Path.GetFileName(FullPath); }
             }
 
-            public override bool Exists => true;
+            public override bool Exists {
+                get { return true; }
+            }
 
             public override void Delete()
             {
@@ -199,25 +217,44 @@ namespace MissionPlanner.Controls
 
             public async Task<DirectoryInfo[]> GetDirectories()
             {
-                // rerequest every time
-                await Task.Run(() =>
+                try
                 {
-                    lock (_mavftp)
+                    // rerequest every time
+                    await Task.Run(() =>
                     {
-                        cache = _mavftp.kCmdListDirectory(FullPath, new CancellationTokenSource());
-                    }
-                }).ConfigureAwait(true);
-                return cache.Where(a => a.isDirectory && a.Name != "." && a.Name != "..")
-                    .Select(a => new DirectoryInfo(a.FullName, _mavftp)).ToArray();
+                        lock (_mavftp)
+                        {
+                            cache = _mavftp.kCmdListDirectory(FullPath, new CancellationTokenSource());
+                        }
+                    }).ConfigureAwait(true);
+                    return cache.Where(a => a.isDirectory && a.Name != "." && a.Name != "..")
+                        .Select(a => new DirectoryInfo(a.FullName, _mavftp)).ToArray();
+
+                }
+                catch (Exception e)
+                {
+                    log.Error(e);
+                }
+
+                return new DirectoryInfo[] { };
             }
 
             public async Task<IEnumerable<MAVFtp.FtpFileInfo>> GetFiles()
             {
-                if (cache == null)
-                    await GetDirectories().ConfigureAwait(true);
+                try
+                {
+                    if (cache == null)
+                        await GetDirectories().ConfigureAwait(true);
 
-                // rerequest every time
-                return cache.Where(a => !a.isDirectory);
+                    // rerequest every time
+                    return cache.Where(a => !a.isDirectory);
+                }
+                catch (Exception e)
+                {
+                    log.Error(e);
+                }
+
+                return new List<MAVFtp.FtpFileInfo>();
             }
         }
 
@@ -227,7 +264,15 @@ namespace MissionPlanner.Controls
 
             foreach (var file in files)
             {
-                await UploadFile(file).ConfigureAwait(true);
+                try
+                {
+                    await UploadFile(file).ConfigureAwait(true);
+                }
+                catch (Exception exception)
+                {
+                    log.Error(exception);
+                    CustomMessageBox.Show(exception.Message);
+                }
             }
 
             TreeView1_NodeMouseClick(null,
@@ -236,7 +281,7 @@ namespace MissionPlanner.Controls
 
         private void ListView1_ColumnClick(object sender, ColumnClickEventArgs e)
         {
-            if (listView1.Sorting == null || listView1.Sorting == SortOrder.Descending)
+            if (listView1.Sorting == SortOrder.Descending)
                 listView1.Sorting = SortOrder.Ascending;
             else
                 listView1.Sorting = SortOrder.Descending;
@@ -297,15 +342,6 @@ namespace MissionPlanner.Controls
                         }
 
                         File.WriteAllBytes(sfd.FileName, ms.ToArray());
-
-                        prd.UpdateProgressAndStatus(-1, "Calc CRC");
-                        uint crc = 0;
-                        _mavftp.kCmdCalcFileCRC32(path, ref crc, cancel);
-                        var crc32a = MAVFtp.crc_crc32(0, File.ReadAllBytes(sfd.FileName));
-                        if (crc32a != crc)
-                        {
-                            throw new BadCrcException();
-                        }
                     };
                     prd.RunBackgroundOperationAsync();
                     _mavftp.Progress -= progress;
@@ -328,7 +364,15 @@ namespace MissionPlanner.Controls
             {
                 foreach (var ofdFileName in ofd.FileNames)
                 {
-                    await UploadFile(ofdFileName).ConfigureAwait(true);
+                    try
+                    {
+                        await UploadFile(ofdFileName).ConfigureAwait(true);
+                    }
+                    catch (Exception exception)
+                    {
+                        log.Error(exception);
+                        CustomMessageBox.Show(exception.Message);
+                    }
                 }
             }
 
@@ -385,10 +429,26 @@ namespace MissionPlanner.Controls
             foreach (ListViewItem listView1SelectedItem in listView1.SelectedItems)
             {
                 toolStripStatusLabel1.Text = "Delete " + listView1SelectedItem.Text;
-                var success = _mavftp.kCmdRemoveFile(((DirectoryInfo)listView1SelectedItem.Tag).FullName + "/" +
-                                                     listView1SelectedItem.Text, new CancellationTokenSource());
-                if (!success)
-                    CustomMessageBox.Show("Failed to delete file", listView1SelectedItem.Text);
+                ProgressReporterDialogue prd = new ProgressReporterDialogue();
+                CancellationTokenSource cancel = new CancellationTokenSource();
+                prd.doWorkArgs.CancelRequestChanged += (o, args) =>
+                {
+                    prd.doWorkArgs.ErrorMessage = "User Cancel";
+                    cancel.Cancel();
+                    _mavftp.kCmdResetSessions();
+                };
+                prd.doWorkArgs.ForceExit = false; 
+                string fullName = ((DirectoryInfo)listView1SelectedItem.Tag).FullName;
+                string text = listView1SelectedItem.Text;
+                prd.DoWork += (iprd) =>
+                {                   
+                    var success = _mavftp.kCmdRemoveFile(fullName + "/" +
+                                                         text, cancel);
+                    if (!success)
+                        CustomMessageBox.Show("Failed to delete file", text);
+                };
+
+                prd.RunBackgroundOperationAsync();
             }
 
             TreeView1_NodeMouseClick(null,
@@ -405,10 +465,25 @@ namespace MissionPlanner.Controls
         {
             if (e.Label == null)
                 return;
+            ProgressReporterDialogue prd = new ProgressReporterDialogue();
+            CancellationTokenSource cancel = new CancellationTokenSource();
+            prd.doWorkArgs.CancelRequestChanged += (o, args) =>
+            {
+                prd.doWorkArgs.ErrorMessage = "User Cancel";
+                cancel.Cancel();
+                _mavftp.kCmdResetSessions();
+            };
+            prd.doWorkArgs.ForceExit = false;
+            var selectedNodeFullPath = treeView1.SelectedNode.FullPath; 
+            var text = listView1.SelectedItems[0].Text;
+            string label = e.Label;
+            prd.DoWork += (iprd) =>
+            {               
+                _mavftp.kCmdRename(selectedNodeFullPath + "/" + text,
+                    selectedNodeFullPath + "/" + label, cancel);
+            };
 
-            _mavftp.kCmdRename(treeView1.SelectedNode.FullPath + "/" + listView1.SelectedItems[0].Text,
-                treeView1.SelectedNode.FullPath + "/" + e.Label, new CancellationTokenSource());
-
+            prd.RunBackgroundOperationAsync();
             TreeView1_NodeMouseClick(null,
                 new TreeNodeMouseClickEventArgs(treeView1.SelectedNode, MouseButtons.Left, 1, 1, 1));
             toolStripStatusLabel1.Text = "Ready";
@@ -419,7 +494,28 @@ namespace MissionPlanner.Controls
             string folder = "";
             var dr = InputBox.Show("Folder Name", "Enter folder name", ref folder);
             if (dr == DialogResult.OK)
-                _mavftp.kCmdCreateDirectory(treeView1.SelectedNode.FullPath + "/" + folder, new CancellationTokenSource());
+            {
+                ProgressReporterDialogue prd = new ProgressReporterDialogue();
+                CancellationTokenSource cancel = new CancellationTokenSource();
+                prd.doWorkArgs.CancelRequestChanged += (o, args) =>
+                {
+                    prd.doWorkArgs.ErrorMessage = "User Cancel";
+                    cancel.Cancel();
+                    _mavftp.kCmdResetSessions();
+                };
+                prd.doWorkArgs.ForceExit = false;
+                string fullPath = treeView1.SelectedNode.FullPath;
+                prd.DoWork += (iprd) =>
+                {
+                    if (!_mavftp.kCmdCreateDirectory(fullPath + "/" + folder,
+                        cancel))
+                    {
+                        CustomMessageBox.Show("Failed to create directory", Strings.ERROR);
+                    }
+                };
+
+                prd.RunBackgroundOperationAsync();
+            }
 
             TreeView1_NodeMouseClick(null,
                 new TreeNodeMouseClickEventArgs(treeView1.SelectedNode, MouseButtons.Left, 1, 1, 1));
@@ -438,9 +534,12 @@ namespace MissionPlanner.Controls
             };
             prd.doWorkArgs.ForceExit = false;
             var crc = 0u;
+            string fullPath = treeView1.SelectedNode.FullPath;
+            string text = listView1.SelectedItems[0].Text;
             prd.DoWork += (iprd) =>
             {
-                _mavftp.kCmdCalcFileCRC32(treeView1.SelectedNode.FullPath + "/" + listView1.SelectedItems[0].Text,
+
+                _mavftp.kCmdCalcFileCRC32(fullPath + "/" + text,
                     ref crc, cancel);
             };
 
@@ -522,15 +621,6 @@ namespace MissionPlanner.Controls
                         }
 
                         File.WriteAllBytes(sfd.FileName, ms.ToArray());
-
-                        prd.UpdateProgressAndStatus(-1, "Calc CRC");
-                        uint crc = 0;
-                        _mavftp.kCmdCalcFileCRC32(path, ref crc, cancel);
-                        var crc32a = MAVFtp.crc_crc32(0, File.ReadAllBytes(sfd.FileName));
-                        if (crc32a != crc)
-                        {
-                            throw new BadCrcException();
-                        }
                     };
                     prd.RunBackgroundOperationAsync();
                     _mavftp.Progress -= progress;

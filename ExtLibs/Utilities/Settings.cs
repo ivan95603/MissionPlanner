@@ -1,6 +1,7 @@
 ﻿using log4net;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -43,7 +44,7 @@ namespace MissionPlanner.Utilities
         /// </summary>
         public static Dictionary<string, string> config = new Dictionary<string, string>();
 
-        const string FileName = "config.xml";
+        public static string FileName { get; set; } = "config.xml";
 
         public string this[string key]
         {
@@ -96,6 +97,17 @@ namespace MissionPlanner.Utilities
             set { this["APMFirmware"] = value; }
         }
 
+        public string GetString(string key, string @default = "")
+        {
+            string result = @default;
+            string value;
+            if (config.TryGetValue(key, out value))
+            {
+                result = value;
+            }
+            return result;
+        }
+
         public string BaudRate
         {
             get
@@ -136,7 +148,14 @@ namespace MissionPlanner.Utilities
             string directory = GetUserDataDirectory() + @"logs";
             if (!Directory.Exists(directory))
             {
-                Directory.CreateDirectory(directory);
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                catch
+                {
+                
+                }
             }
 
             return directory;
@@ -160,6 +179,12 @@ namespace MissionPlanner.Utilities
         {
             var list = GetList(key).ToList();
             list.Add(item);
+            SetList(key, list);
+        }
+
+        public void RemoveList(string key, string item)
+        {
+            var list = GetList(key).ToList().Where(a => a != item);
             SetList(key, list);
         }
 
@@ -234,16 +259,26 @@ namespace MissionPlanner.Utilities
         /// </summary>
         /// <returns></returns>
         public static string GetRunningDirectory()
-        {     
-            
+        {
             var ass = Assembly.GetEntryAssembly();
 
             if (ass == null)
+            {
+                if (CustomUserDataDirectory != "")
+                    return CustomUserDataDirectory + Path.DirectorySeparatorChar + AppConfigName +
+                           Path.DirectorySeparatorChar;
+
                 return "." + Path.DirectorySeparatorChar;
+            }
 
             var location = ass.Location;
 
             var path = Path.GetDirectoryName(location);
+
+            if (path == "")
+            {
+                path = Path.GetDirectoryName(GetDataDirectory());
+            }
 
             return path + Path.DirectorySeparatorChar;
         }
@@ -271,12 +306,18 @@ namespace MissionPlanner.Utilities
             return path;
         }
 
+        public static string CustomUserDataDirectory = "";
+
         /// <summary>
         /// User specific data
         /// </summary>
         /// <returns></returns>
         public static string GetUserDataDirectory()
         {
+            if (CustomUserDataDirectory != "")
+                return CustomUserDataDirectory + Path.DirectorySeparatorChar + AppConfigName +
+                       Path.DirectorySeparatorChar;
+
             var path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + Path.DirectorySeparatorChar + AppConfigName +
                           Path.DirectorySeparatorChar;
 
@@ -329,9 +370,59 @@ namespace MissionPlanner.Utilities
 
             return newpath;
         }
-        
+
+        /// <summary>
+        /// Returns the full path to the custom default config 
+        /// </summary>
+        /// <returns></returns>
+        static string GetConfigDefaultsFullPath()
+        {
+            // get default path details
+            var newdir = GetRunningDirectory();
+
+            var newpath = Path.Combine(newdir, "custom.config.xml");
+
+            return newpath;
+        }
+
         public void Load()
         {
+            // load the defaults
+            try
+            {
+                if (File.Exists(GetConfigDefaultsFullPath()))
+                    using (XmlTextReader xmlreader = new XmlTextReader(GetConfigDefaultsFullPath()))
+                    {
+                        while (xmlreader.Read())
+                        {
+                            if (xmlreader.NodeType == XmlNodeType.Element)
+                            {
+                                try
+                                {
+                                    switch (xmlreader.Name)
+                                    {
+                                        case "Config":
+                                            break;
+                                        case "xml":
+                                            break;
+                                        default:
+                                            config[xmlreader.Name] = xmlreader.ReadString();
+                                            break;
+                                    }
+                                }
+                                // silent fail on bad entry
+                                catch (Exception)
+                                {
+                                }
+                            }
+                        }
+                    }
+            }
+            catch
+            {
+
+            }
+
             if (!File.Exists(GetConfigFullPath()))
                 return;
 
@@ -383,12 +474,18 @@ namespace MissionPlanner.Utilities
 
                 xmlwriter.WriteStartElement("Config");
 
-                foreach (string key in config.Keys)
+                foreach (string key in config.Keys.OrderBy(a=>a))
                 {
                     try
                     {
-                        if (key == "" || key.Contains("/")) // "/dev/blah"
+                        if (key == "" || key.Contains("/") || key.Contains(" ")
+                            || key.Contains("-") || key.Contains(":")
+                            || key.Contains(";") || key.Contains("."))
+                        {
+                            Debugger.Break();
+                            Console.WriteLine("Bad config key " + key);
                             continue;
+                        }
 
                         xmlwriter.WriteElementString(key, ""+config[key]);
                     }

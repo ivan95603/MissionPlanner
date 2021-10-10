@@ -135,8 +135,16 @@ namespace UAVCAN
             }
             else if (bit_length <= 32)
             {
-                std_byte_length = 4;
-                storage.u32 = ((UInt32) (dynamic) value);
+                if (value is float)
+                {
+                    std_byte_length = 4;
+                    storage.f32 = ((float)(dynamic)value);
+                }
+                else
+                {
+                    std_byte_length = 4;
+                    storage.u32 = ((UInt32) (dynamic) value);
+                }
             }
             else if (bit_length <= 64)
             {
@@ -447,12 +455,22 @@ namespace UAVCAN
                 throw new ArgumentException();
         }
 
+        /// <summary>
+        /// Float to Float16 as a Uint16
+        /// </summary>
+        /// <param name="flo"></param>
+        /// <returns></returns>
         private static UInt16 canardConvertNativeFloatToFloat16(Single flo)
         {
             var bad = make_float16(flo);
             return bad;
         }
 
+        /// <summary>
+        /// Float16 as a Uint16 to Float
+        /// </summary>
+        /// <param name="float16Val"></param>
+        /// <returns></returns>
         private static Single canardConvertFloat16ToNativeFloat(ushort float16Val)
         {
             var bad = float16_to_float32(float16Val);

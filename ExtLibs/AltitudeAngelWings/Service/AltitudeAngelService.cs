@@ -52,7 +52,7 @@ namespace AltitudeAngelWings.Service
                     .MapChanged
                     .Throttle(TimeSpan.FromSeconds(10))
                     .RepeatLastValue(TimeSpan.FromSeconds(60))
-                    .Subscribe(async i => await UpdateMapData(_missionPlanner.FlightDataMap)));
+                    .Subscribe(i => UpdateMapData(_missionPlanner.FlightDataMap)));
             }
             catch
             {
@@ -64,7 +64,7 @@ namespace AltitudeAngelWings.Service
                     .MapChanged
                     .Throttle(TimeSpan.FromSeconds(1))
                     .RepeatLastValue(TimeSpan.FromSeconds(60))
-                    .Subscribe(async i => await UpdateMapData(_missionPlanner.FlightPlanningMap)));
+                    .Subscribe(i => UpdateMapData(_missionPlanner.FlightPlanningMap)));
             }
             catch
             {
@@ -73,9 +73,9 @@ namespace AltitudeAngelWings.Service
             try
             {
                 _disposer.Add(flightDataService.FlightArmed
-                    .Subscribe(async i => await SubmitFlightReport(i)));
+                    .Subscribe( i =>  SubmitFlightReport(i)));
                 _disposer.Add(flightDataService.FlightDisarmed
-                    .Subscribe(async i => await CompleteFlightReport(i)));
+                    .Subscribe( i =>  CompleteFlightReport(i)));
             }
             catch
             {
@@ -93,6 +93,9 @@ namespace AltitudeAngelWings.Service
 
         private async Task SubmitFlightReport(Models.FlightData flightData)
         {
+            if (!IsSignedIn)
+                return;
+
             await _messagesService.AddMessageAsync(new Message($"ARMED: {flightData.CurrentPosition.Latitude},{flightData.CurrentPosition.Longitude}"));
             if (!_settings.FlightReportEnable || _settings.CurrentFlightReportId != null)
             {

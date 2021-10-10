@@ -12,7 +12,9 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading;
 using gsize = System.UInt64;
@@ -30,9 +32,9 @@ namespace MissionPlanner.Utilities
 
         static object _lock = new object();
 
-        private static event EventHandler<Image> _onNewImage;
+        private static event EventHandler<Bitmap> _onNewImage;
 
-        public static event EventHandler<Image> onNewImage
+        public static event EventHandler<Bitmap> onNewImage
         {
             add { _onNewImage += value; }
             remove { _onNewImage -= value; }
@@ -40,116 +42,124 @@ namespace MissionPlanner.Utilities
 
         public static class NativeMethods
         {
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            public const string lib = "libgstreamer-1.0-0.dll";
+
+            public const string applib = "libgstapp-1.0-0.dll";
+
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_init(ref int argc, ref IntPtr[] argv);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_init(IntPtr argc, IntPtr argv);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_init(ref int argc, string[] argv);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern bool gst_init_check(ref int argc, ref IntPtr[] argv, out IntPtr error);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern bool gst_init_check(IntPtr argc, IntPtr argv, out IntPtr error);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
-            public static extern void gst_version(ref guint major,
-                ref guint minor,
-                ref guint micro,
-                ref guint nano);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
+            public static extern void gst_version(out guint major,
+                out guint minor,
+                out guint micro,
+                out guint nano);
+
+            [DllImport (lib, CallingConvention = CallingConvention.Cdecl)]
+            private static extern IntPtr gst_version_string ();
+
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern UIntPtr gst_buffer_extract(IntPtr raw, UIntPtr offset, byte[] dest, UIntPtr size);
 
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_buffer_extract_dup(IntPtr raw, UIntPtr offset, UIntPtr size, out IntPtr dest,
                 out UIntPtr dest_size);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_pipeline_new(string name);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_element_factory_make(string factoryname, string name);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_message_parse_error(IntPtr msg, out IntPtr err, out IntPtr debug);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_message_get_stream_status_object(IntPtr raw);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern GstStateChangeReturn gst_element_set_state(IntPtr pipeline, GstState gST_STATE_PLAYING);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_parse_launch(string cmdline, out IntPtr error);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_bus_timed_pop_filtered(IntPtr bus, ulong gST_CLOCK_TIME_NONE,
                 GstMessageType gstMessageType);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_element_get_bus(IntPtr pipeline);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_debug_bin_to_dot_file(IntPtr pipeline, GstDebugGraphDetails details,
                 string file_name);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_message_set_stream_status_object(IntPtr raw, IntPtr value);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_app_sink_try_pull_sample(IntPtr appsink,
                 GstClockTime timeout);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr
                 gst_app_sink_get_caps(IntPtr appsink);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_app_sink_set_max_buffers(IntPtr appsink, guint max);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_bin_get_by_name(IntPtr pipeline, string name);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr gst_sample_get_buffer(IntPtr sample);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr
                 gst_sample_get_caps(IntPtr sample);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr
                 gst_sample_get_info(IntPtr sample);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern
                 StringBuilder
                 gst_structure_to_string(IntPtr structure);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern bool
                 gst_structure_get_int(IntPtr structure,
                     string fieldname,
                     out int value);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern IntPtr
                 gst_caps_get_structure(IntPtr caps,
                     guint index);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern
                 IntPtr gst_caps_to_string(IntPtr caps);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern bool gst_buffer_map(IntPtr buffer, out GstMapInfo info, GstMapFlags GstMapFlags);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_buffer_unmap(IntPtr buffer, out GstMapInfo info);
 
             public static void gst_sample_unref(IntPtr sample)
@@ -162,26 +172,26 @@ namespace MissionPlanner.Utilities
                 gst_mini_object_unref(buffer);
             }
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.StdCall)]
+            [DllImport(lib, CallingConvention = CallingConvention.StdCall)]
             public static extern void
                 gst_caps_unref(IntPtr caps);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_structure_free(IntPtr structure);
 
-            [DllImport("libgstreamer-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(lib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void
                 gst_mini_object_unref(IntPtr mini_object);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern bool gst_app_sink_is_eos(IntPtr appsink);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_app_sink_set_drop(IntPtr appsink, bool v);
 
-            [DllImport("libgstapp-1.0-0.dll", CallingConvention = CallingConvention.Cdecl)]
+            [DllImport(applib, CallingConvention = CallingConvention.Cdecl)]
             public static extern void gst_app_sink_set_callbacks(IntPtr appsink, GstAppSinkCallbacks callbacks,
-                ref int testdata, object p);
+                IntPtr user_data, IntPtr notify);
         }
 
         public const UInt64 GST_CLOCK_TIME_NONE = 18446744073709551615;
@@ -216,8 +226,10 @@ namespace MissionPlanner.Utilities
             public new_preroll new_preroll; //GstFlowReturn(*new_preroll)      (GstAppSink* sink, gpointer user_data);
             public new_buffer new_buffer; //GstFlowReturn(*new_buffer)       (GstAppSink* sink, gpointer user_data);
 
-            public new_buffer_list
-                new_buffer_list; //GstFlowReturn(*new_buffer_list)  (GstAppSink* sink, gpointer user_data);
+            public IntPtr _gst_reserved1;
+            public IntPtr _gst_reserved2;
+            public IntPtr _gst_reserved3;
+            public IntPtr _gst_reserved4;
         }
 
         public enum GstFlowReturn
@@ -346,10 +358,23 @@ namespace MissionPlanner.Utilities
             public string message;
         }
 
+        [HandleProcessCorruptedStateExceptions, SecurityCritical]
         public static Thread StartA(string stringpipeline)
         {
+            var th = new Thread(ThreadStart) {IsBackground = true, Name = "gstreamer"};
+
+            th.Start(stringpipeline);
+
+            return th;
+        }
+
+
+        [HandleProcessCorruptedStateExceptions, SecurityCritical]
+        static void ThreadStart(object datao)
+        {
+            string stringpipeline = (string)datao;
             int argc = 1;
-            string[] argv = new string[] {"-vvv"};
+            string[] argv = new string[] { "-vvv" };
 
             try
             {
@@ -360,17 +385,17 @@ namespace MissionPlanner.Utilities
             {
                 CustomMessageBox.Show("The file was not found at " + gstlaunch +
                                       "\nPlease verify permissions " + ex.ToString());
-                return null;
+                return;
             }
             catch (BadImageFormatException)
             {
                 CustomMessageBox.Show("The incorrect exe architecture has been detected at " + gstlaunch +
                                       "\nPlease install gstreamer for the correct architecture");
-                return null;
+                return;
             }
 
             uint v1 = 0, v2 = 0, v3 = 0, v4 = 0;
-            NativeMethods.gst_version(ref v1, ref v2, ref v3, ref v4);
+            NativeMethods.gst_version(out v1, out v2, out v3, out v4);
 
             log.InfoFormat("GStreamer {0}.{1}.{2}.{3}", v1, v2, v3, v4);
 
@@ -381,11 +406,12 @@ namespace MissionPlanner.Utilities
             {
                 var er = Marshal.PtrToStructure<GError>(error);
                 log.Error("gst_init_check: " + er.message);
-                return null;
+                return;
             }
 
             /* Set up the pipeline */
 
+            log.InfoFormat("GStreamer parse {0}", stringpipeline);
             var pipeline = NativeMethods.gst_parse_launch(
                 stringpipeline,
                 //@"videotestsrc ! video/x-raw, width=1280, height=720, framerate=30/1 ! x264enc speed-preset=1 threads=1 sliced-threads=1 mb-tree=0 rc-lookahead=0 sync-lookahead=0 bframes=0 ! rtph264pay ! application/x-rtp ! rtph264depay ! avdec_h264 ! videoconvert ! video/x-raw,format=BGRA ! appsink name=outsink",
@@ -394,38 +420,14 @@ namespace MissionPlanner.Utilities
                 out error);
 
             //rtspsrc location=rtsp://192.168.1.21/live ! application/x-rtp ! rtph265depay ! avdec_h265 ! videoconvert ! video/x-raw,format=BGRA ! appsink name=outsink
-
+            //videotestsrc ! video/x-raw, width=1280, height=720, framerate=30/1 ! videoconvert ! video/x-raw,format=BGRA ! appsink name=outsink 
 
             if (error != IntPtr.Zero)
             {
                 var er = Marshal.PtrToStructure<GError>(error);
                 log.Error("gst_parse_launch: " + er.message);
-                return null;
+                return;
             }
-
-            // appsink is part of the parse launch
-            var appsink = NativeMethods.gst_bin_get_by_name(pipeline, "outsink");
-
-            //var appsink = NativeMethods.gst_element_factory_make("appsink", null);
-
-            int testdata = 0;
-            bool newdata = false;
-            GstAppSinkCallbacks callbacks = new GstAppSinkCallbacks();
-            callbacks.new_buffer += (sink, data) =>
-            {
-                newdata = true; return GstFlowReturn.GST_FLOW_OK; };
-            //callbacks.new_preroll += (sink, data) => { return GstFlowReturn.GST_FLOW_OK; };
-            callbacks.eos += (sink, data) => { };
-
-            NativeMethods.gst_app_sink_set_drop(appsink, true);
-            NativeMethods.gst_app_sink_set_max_buffers(appsink, 1);
-            NativeMethods.gst_app_sink_set_callbacks(appsink, callbacks, ref testdata, null);
-
-            /* Start playing */
-            var running = NativeMethods.gst_element_set_state(pipeline, GstState.GST_STATE_PLAYING) != GstStateChangeReturn.GST_STATE_CHANGE_FAILURE;
-
-            /* Wait until error or EOS */
-            var bus = NativeMethods.gst_element_get_bus(pipeline);
 
             NativeMethods.gst_debug_bin_to_dot_file(pipeline, GstDebugGraphDetails.GST_DEBUG_GRAPH_SHOW_ALL,
                 "pipeline");
@@ -434,82 +436,106 @@ namespace MissionPlanner.Utilities
 
             //var msg = GStreamer.gst_bus_timed_pop_filtered(bus, GStreamer.GST_CLOCK_TIME_NONE, GStreamer.GstMessageType.GST_MESSAGE_ERROR | GStreamer.GstMessageType.GST_MESSAGE_EOS);
 
+
+            // appsink is part of the parse launch
+            var appsink = NativeMethods.gst_bin_get_by_name(pipeline, "outsink");
+            log.Info("got appsink ");
+            //var appsink = NativeMethods.gst_element_factory_make("appsink", null);
+
+            bool newdata = false;
+            GstAppSinkCallbacks callbacks = new GstAppSinkCallbacks();
+            //var callbackhandle = GCHandle.Alloc(callbacks, GCHandleType.Pinned);
+            /*callbacks.new_buffer += (sink, data) =>
+            {
+                newdata = true;
+                return GstFlowReturn.GST_FLOW_OK;
+            };
+            callbacks.new_preroll += (sink, data) =>
+            {
+                log.Info("new_preroll");
+                return GstFlowReturn.GST_FLOW_OK;
+            };
+            callbacks.eos += (sink, data) => { log.Info("EOS"); };
+            */
+
+            NativeMethods.gst_app_sink_set_drop(appsink, true);
+            NativeMethods.gst_app_sink_set_max_buffers(appsink, 1);
+            // callback fail on linux
+            //NativeMethods.gst_app_sink_set_callbacks(appsink, callbacks, IntPtr.Zero, IntPtr.Zero);
+            log.Info("set appsink params ");
+            /* Start playing */
+            var running = NativeMethods.gst_element_set_state(pipeline, GstState.GST_STATE_PLAYING) != GstStateChangeReturn.GST_STATE_CHANGE_FAILURE;
+            log.Info("set playing ");
+            /* Wait until error or EOS */
+            var bus = NativeMethods.gst_element_get_bus(pipeline);
+
             int Width = 0;
             int Height = 0;
             int trys = 0;
+            // prevent it falling out of scope
+            GstAppSinkCallbacks callbacks2 = callbacks;
 
-            var th = new Thread(delegate()
+            run = true;
+            log.Info("start frame loop gst_app_sink_is_eos");
+            while (run && !NativeMethods.gst_app_sink_is_eos(appsink))
             {
-                // prevent it falling out of scope
-                GstAppSinkCallbacks callbacks2 = callbacks;
-
-                Thread.Sleep(500);
-
-                run = true;
-
-                while (run && !NativeMethods.gst_app_sink_is_eos(appsink))
+                try
                 {
-                    try
+                    //log.Info("gst_app_sink_try_pull_sample ");
+                    var sample = NativeMethods.gst_app_sink_try_pull_sample(appsink, GST_SECOND * 5);
+                    if (sample != IntPtr.Zero)
                     {
-                        var sample = NativeMethods.gst_app_sink_try_pull_sample(appsink, GST_SECOND);
-                        if (sample != IntPtr.Zero)
+                        trys = 0;
+                        //var caps = gst_app_sink_get_caps(appsink);
+                        //log.Info("gst_sample_get_caps ");
+                        var caps = NativeMethods.gst_sample_get_caps(sample);
+                        var caps_s = NativeMethods.gst_caps_get_structure(caps, 0);
+                        NativeMethods.gst_structure_get_int(caps_s, "width", out Width);
+                        NativeMethods.gst_structure_get_int(caps_s, "height", out Height);
+
+                        //var capsstring = gst_caps_to_string(caps_s);
+                        //var structure = gst_sample_get_info(sample);
+                        //var structstring = gst_structure_to_string(structure);
+                        //log.Info("gst_sample_get_buffer ");
+                        var buffer = NativeMethods.gst_sample_get_buffer(sample);
+                        if (buffer != IntPtr.Zero)
                         {
-                            trys = 0;
-                            //var caps = gst_app_sink_get_caps(appsink);
-                            var caps = NativeMethods.gst_sample_get_caps(sample);
-                            var caps_s = NativeMethods.gst_caps_get_structure(caps, 0);
-                            NativeMethods.gst_structure_get_int(caps_s, "width", out Width);
-                            NativeMethods.gst_structure_get_int(caps_s, "height", out Height);
-
-                            //var capsstring = gst_caps_to_string(caps_s);
-                            //var structure = gst_sample_get_info(sample);
-                            //var structstring = gst_structure_to_string(structure);
-                            var buffer = NativeMethods.gst_sample_get_buffer(sample);
-                            if (buffer != IntPtr.Zero)
+                            var info = new GstMapInfo();
+                            if (NativeMethods.gst_buffer_map(buffer, out info, GstMapFlags.GST_MAP_READ))
                             {
-                                var info = new GstMapInfo();
-                                if (NativeMethods.gst_buffer_map(buffer, out info, GstMapFlags.GST_MAP_READ))
-                                {
-                                    var image = new Bitmap(Width, Height, 4 * Width,
-                                        SkiaSharp.SKColorType.Bgra8888, info.data);
+                                var image = new Bitmap(Width, Height, 4 * Width, SkiaSharp.SKColorType.Bgra8888,
+                                    info.data);
 
-                                    _onNewImage?.Invoke(null, image);
-                                } 
-                                NativeMethods.gst_buffer_unmap(buffer, out info);
+                                _onNewImage?.Invoke(null, image);
                             }
 
-                            NativeMethods.gst_sample_unref(sample);
+                            NativeMethods.gst_buffer_unmap(buffer, out info);
                         }
-                        else
-                        {
-                            log.Info("failed gst_app_sink_try_pull_sample "+ trys + "/60");
-                            trys++;
-                            if (trys > 60)
-                                break;
-                        }
+
+                        NativeMethods.gst_sample_unref(sample);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        log.Error(ex);
-                        trys++;
-                        if (trys > 60)
-                            break;
+                        log.Info("failed gst_app_sink_try_pull_sample " + trys + "");
                     }
                 }
+                catch (Exception ex)
+                {
+                    log.Error(ex);
+                    trys++;
+                    if (trys > 12) break;
+                }
+            }
 
-                NativeMethods.gst_element_set_state(pipeline, GstState.GST_STATE_NULL);
-                NativeMethods.gst_buffer_unref(bus);
+            NativeMethods.gst_element_set_state(pipeline, GstState.GST_STATE_NULL);
+            NativeMethods.gst_buffer_unref(bus);
 
-                // cleanup
-                _onNewImage?.Invoke(null, null);
+            //callbackhandle.Free();
 
-                log.Info("Gstreamer Exit");
+            // cleanup
+            _onNewImage?.Invoke(null, null);
 
-            }) {IsBackground = true, Name = "gstreamer"};
-
-            th.Start();
-
-            return th;
+            log.Info("Gstreamer Exit");
         }
 
         ~GStreamer()
@@ -559,6 +585,8 @@ namespace MissionPlanner.Utilities
             Environment.SetEnvironmentVariable("GST_DEBUG_DUMP_DOT_DIR", Path.GetTempPath());
         }
 
+        //C:\ProgramData\Mission Planner\gstreamer\1.0\x86_64\bin
+
         //gst-launch-1.0.exe  videotestsrc pattern=ball  is-live=true ! video/x-raw,width=640,height=480 ! clockoverlay ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
         //gst-launch-1.0.exe -v udpsrc port=5600 buffer-size=60000 ! application/x-rtp ! rtph264depay ! avdec_h264 ! queue leaky=2 ! avenc_mjpeg ! tcpserversink host=127.0.0.1 port=1235 sync=false
         //udpsrc port=5600 buffer-size=60000 ! application/x-rtp ! rtph264depay ! avdec_h264 ! queue leaky=2 ! video/x-raw,format=BGRx ! appsink name=outsink
@@ -584,12 +612,19 @@ namespace MissionPlanner.Utilities
         {
             List<string> dirs = new List<string>();
 
+            // linux
             dirs.Add("/usr/lib/x86_64-linux-gnu");
-
+            // rpi
+            dirs.Add("/usr/lib/arm-linux-gnueabihf");
+            // current
             dirs.Add(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
+            // settings
+            dirs.Add(Settings.GetDataDirectory());
+            // custom settings
+            dirs.Add(Settings.CustomUserDataDirectory);
+            // sitl bindle
+            dirs.Add(GStreamer.BundledPath);
 
-            dirs.Add(Settings.GetDataDirectory());                    
-            
             DriveInfo[] allDrives = DriveInfo.GetDrives();
             foreach (DriveInfo d in allDrives)
             {
@@ -605,9 +640,10 @@ namespace MissionPlanner.Utilities
 
             foreach (var dir in dirs)
             {
+                log.Info($"look in dir {dir}");
                 if (Directory.Exists(dir))
                 {
-                    var ans = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories).Where(a => a.ToLower().Contains("libgstreamer-1.0-0.dll") || a.ToLower().Contains("libgstreamer-1.0.so.0")).ToArray();
+                    var ans = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories).Where(a => a.ToLower().Contains("libgstreamer-1.0-0.dll") || a.ToLower().Contains("libgstreamer-1.0.so.0") || a.ToLower().Contains("libgstreamer_android.so")).ToArray();
 
                     ans = ans.Where(a =>
                         (!is64bit && !a.ToLower().Contains("_64")) || is64bit && a.ToLower().Contains("_64")).ToArray();
@@ -646,6 +682,9 @@ namespace MissionPlanner.Utilities
                 });
             }
         }
+
+        // custom search path for .so
+        public static string BundledPath { get; set; }
 
         public static Process Start(string custompipelinesrc = "", bool externalpipeline = false,
             bool allowmultiple = false)
@@ -1004,7 +1043,7 @@ namespace MissionPlanner.Utilities
 
                                     IntPtr ptr = bmpData.Scan0;
 
-                                    Marshal.Copy(ms.ToArray(), 0, ptr, (int) img.Width * img.Height * 4);
+                                    Marshal.Copy(ms.GetBuffer(), 0, ptr, (int) img.Width * img.Height * 4);
 
                                     img.UnlockBits(bmpData);
                                 }
@@ -1098,7 +1137,7 @@ namespace MissionPlanner.Utilities
                     ms.Seek(0, SeekOrigin.Begin);
                     try
                     {
-                        var temp = Image.FromStream(ms);
+                        var temp = Bitmap.FromStream(ms);
 
                         //File.WriteAllBytes(tempno + ".bmp", ms.ToArray());
 
@@ -1186,15 +1225,18 @@ namespace MissionPlanner.Utilities
             string output = "";
             string url = "";
 
+            if(RuntimeInformation.OSArchitecture == Architecture.Arm || RuntimeInformation.OSArchitecture == Architecture.Arm64)
+                return;
+
             if (System.Environment.Is64BitProcess)
             {
-                output = Settings.GetDataDirectory() + "gstreamer-1.0-x86_64-1.12.4.zip";
-                url = "https://firmware.ardupilot.org/MissionPlanner/gstreamer/gstreamer-1.0-x86_64-1.12.4.zip";
+                output = Settings.GetDataDirectory() + "gstreamer-1.0-x86_64-1.14.4.zip";
+                url = "https://firmware.ardupilot.org/MissionPlanner/gstreamer/gstreamer-1.0-x86_64-1.14.4.zip";
             }
             else
             {
-                output = Settings.GetDataDirectory() + "gstreamer-1.0-x86-1.9.2.zip";
-                url = "https://firmware.ardupilot.org/MissionPlanner/gstreamer/gstreamer-1.0-x86-1.9.2.zip";
+                output = Settings.GetDataDirectory() + "gstreamer-1.0-x86-1.14.4.zip";
+                url = "https://firmware.ardupilot.org/MissionPlanner/gstreamer/gstreamer-1.0-x86-1.14.4.zip";
             }
 
 

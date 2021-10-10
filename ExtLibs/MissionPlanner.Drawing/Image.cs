@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.Serialization;
 using SkiaSharp;
@@ -21,11 +23,16 @@ namespace System.Drawing
             set { _skBitmap = value; }
         }
 
+        public SKImage ToSKImage()
+        {
+            return SKImage.FromBitmap(nativeSkBitmap);
+        }
 
         public int Width
         {
             get { return nativeSkBitmap.Width; }
         }
+
         public int Height
         {
             get { return nativeSkBitmap.Height; }
@@ -33,11 +40,32 @@ namespace System.Drawing
 
         /// <summary>Gets the pixel format for this <see cref="T:MissionPlanner.Drawing.Image" />.</summary>
         /// <returns>A <see cref="T:MissionPlanner.Drawing.PixelFormat" /> that represents the pixel format for this <see cref="T:MissionPlanner.Drawing.Image" />.</returns>
-        public SKColorType PixelFormat
+        public PixelFormat PixelFormat
         {
-            get { return nativeSkBitmap.ColorType; }
+            get
+            {
+                switch (nativeSkBitmap.ColorType)
+                {
+                    case SKColorType.Bgra8888:
+                        return Imaging.PixelFormat.Format32bppArgb;
+                    case SKColorType.Rgb888x:
+                        return Imaging.PixelFormat.Format32bppRgb;
+                    case SKColorType.Argb4444:
+                        return Imaging.PixelFormat.Format16bppArgb1555;
+                    case SKColorType.Rgb565:
+                        return Imaging.PixelFormat.Format16bppRgb565;
+                    default:
+                        return Imaging.PixelFormat.Format32bppArgb;
+                }
+            }
+
+            set
+            {
+                Console.WriteLine("PixelFormat set " + value);
+            }
         }
 
+        public PropertyItem[] PropertyItems { get; }
 
         // System.Drawing.Image
         /// <summary>Gets the width and height, in pixels, of this image.</summary>
@@ -60,6 +88,12 @@ namespace System.Drawing
             get { return userData; }
             set { userData = value; }
         }
+
+        public IEnumerable<Guid> FrameDimensionsList { get; set; } = new List<Guid>();
+
+        public int VerticalResolution = 72;
+
+        public int HorizontalResolution = 72;
 
 
         public static Image FromFile(string filename)
@@ -87,19 +121,26 @@ namespace System.Drawing
 
         internal Image()
         {
-
         }
+
+        ~Image()
+        {
+             Dispose();
+        }
+
         protected Image(SerializationInfo info, StreamingContext context)
         {
-            FromStream(new MemoryStream((byte[]) info.GetValue("pngdata", typeof(byte[]))));
+            nativeSkBitmap = FromStream(new MemoryStream((byte[]) info.GetValue("Data", typeof(byte[]))))
+                .nativeSkBitmap;
         }
 
         public void GetObjectData(SerializationInfo info, StreamingContext context)
         {
             MemoryStream ms = new MemoryStream();
             Save(ms, SKEncodedImageFormat.Png);
-            info.AddValue("pngdata", ms.ToArray());
+            info.AddValue("Data", ms.GetBuffer());
         }
+
 
         public void Save(string filename, SKEncodedImageFormat format)
         {
@@ -107,9 +148,22 @@ namespace System.Drawing
                 SKImage.FromBitmap(nativeSkBitmap).Encode(format, 100).SaveTo(stream);
         }
 
+
         public void Save(Stream stream, SKEncodedImageFormat format)
         {
             SKImage.FromBitmap(nativeSkBitmap).Encode(format, 100).SaveTo(stream);
+        }
+
+        public void Save(string filename, ImageFormat format)
+        {
+            using (var stream = File.OpenWrite(filename))
+                SKImage.FromBitmap(nativeSkBitmap).Encode(format.format, 100).SaveTo(stream);
+        }
+
+
+        public void Save(Stream stream, ImageFormat format)
+        {
+            SKImage.FromBitmap(nativeSkBitmap).Encode(format.format, 100).SaveTo(stream);
         }
 
         public void Save(string outputfilename)
@@ -119,7 +173,28 @@ namespace System.Drawing
 
         public void Dispose()
         {
-            nativeSkBitmap?.Dispose();
+            try
+            {
+               // nativeSkBitmap?.Dispose();
+                nativeSkBitmap = null;
+            }
+            catch
+            {
+            }
+        }
+
+        public void RotateFlip(RotateFlipType rotateNoneFlipY)
+        {
+        }
+
+        public int GetFrameCount(FrameDimension time)
+        {
+            return 1;
+        }
+
+        public int SelectActiveFrame(FrameDimension dimension, int frameIndex)
+        {
+            return 1;
         }
     }
 }

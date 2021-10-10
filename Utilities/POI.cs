@@ -65,7 +65,7 @@ namespace MissionPlanner.Utilities
 
             POI.POIs.Add(pnt);
 
-            if (_POIModified != null)
+            if (_POIModified != null && !loading)
                 _POIModified(null, null);
         }
 
@@ -201,6 +201,9 @@ namespace MissionPlanner.Utilities
                 }
             }
             loading = false;
+            // redraw now
+            if (_POIModified != null)
+                _POIModified(null, null);
         }
 
         public static void UpdateOverlay(GMap.NET.WindowsForms.GMapOverlay poioverlay)

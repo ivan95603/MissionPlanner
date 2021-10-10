@@ -541,7 +541,7 @@ namespace MissionPlanner
             for (a = 0; a < 1000000; a++)
             {
                 var obj = (object)new MAVLink.mavlink_heartbeat_t();
-                MavlinkUtil.ByteArrayToStructure(array, ref obj, 6);
+                MavlinkUtil.ByteArrayToStructure(array, ref obj, 6, 5);
             }
             end = DateTime.Now;
             Console.WriteLine("ByteArrayToStructure " + (end - start).TotalMilliseconds);
@@ -566,7 +566,26 @@ namespace MissionPlanner
                 var ans3 = MavlinkUtil.ByteArrayToStructureGC<MAVLink.mavlink_heartbeat_t>(array, 6);
             }
             end = DateTime.Now;
+            Console.WriteLine("ByteArrayToStructureGC<T> " + (end - start).TotalMilliseconds);
+
+            start = DateTime.Now;
+            for (a = 0; a < 1000000; a++)
+            {
+                var ans4 = MavlinkUtil.ByteArrayToStructureGC(array, typeof(MAVLink.mavlink_heartbeat_t), 6, 5);
+            }
+            end = DateTime.Now;
             Console.WriteLine("ByteArrayToStructureGC " + (end - start).TotalMilliseconds);
+
+            start = DateTime.Now;
+            for (a = 0; a < 1000000; a++)
+            {
+                var ans4 = MavlinkUtil.ByteArrayToStructureGCArray(array, typeof(MAVLink.mavlink_heartbeat_t), 6, 5);
+            }
+            end = DateTime.Now;
+            Console.WriteLine("ByteArrayToStructureGCArray " + (end - start).TotalMilliseconds);
+
+
+            
         }
 
         private void but_armandtakeoff_Click(object sender, EventArgs e)
@@ -625,14 +644,17 @@ namespace MissionPlanner
 
         private void BUT_QNH_Click(object sender, EventArgs e)
         {
-            var currentQNH = MainV2.comPort.GetParam("GND_ABS_PRESS").ToString();
+            var paramname = MainV2.comPort.MAV.param.ContainsKey("GND_ABS_PRESS") ? "GND_ABS_PRESS" : "BARO1_GND_PRESS";
+
+            var currentQNH = MainV2.comPort.GetParam(paramname).ToString();
 
             if (InputBox.Show("QNH", "Enter the QNH in pascals (103040 = 1030.4 hPa)", ref currentQNH) ==
                 DialogResult.OK)
             {
                 var newQNH = double.Parse(currentQNH);
 
-                MainV2.comPort.setParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "GND_ABS_PRESS", newQNH);
+                MainV2.comPort.setParam((byte) MainV2.comPort.sysidcurrent, (byte) MainV2.comPort.compidcurrent,
+                    paramname, newQNH);
             }
         }
 
@@ -804,19 +826,6 @@ namespace MissionPlanner
             flow.newImage += (s, eh) => imagebox.Image = (Image)eh.Image.Clone();
         }
 
-        private void myButton2_Click(object sender, EventArgs e)
-        {
-            var sp = new Sphere();
-
-            sp.Dock = DockStyle.Fill;
-
-            var frm = new Form();
-
-            frm.Controls.Add(sp);
-
-            frm.Show();
-        }
-
         private async void but_gpsinj_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog();
@@ -892,8 +901,8 @@ namespace MissionPlanner
                 if (Directory.Exists(fbd.SelectedPath))
                 {
                     Settings.Instance["GDALImageDir"] = fbd.SelectedPath;
-                    GDAL.GDAL.OnProgress += GDAL_OnProgress;
-                    GDAL.GDAL.ScanDirectory(fbd.SelectedPath);
+                    Utilities.GDAL.OnProgress += GDAL_OnProgress;
+                    Utilities.GDAL.ScanDirectory(fbd.SelectedPath);
                     DTED.OnProgress += GDAL_OnProgress;
                     DTED.AddCustomDirectory(fbd.SelectedPath);
 
@@ -1007,16 +1016,26 @@ namespace MissionPlanner
         private void but_blupdate_Click(object sender, EventArgs e)
         {
             if (CustomMessageBox.Show("Are you sure you want to upgrade the bootloader? This can brick your board",
-                    "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int)DialogResult.Yes)
-                if (CustomMessageBox.Show("Are you sure you want to upgrade the bootloader? This can brick your board, Please allow 5 mins for this process",
-                        "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int)DialogResult.Yes)
-                    if (MainV2.comPort.doCommand((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, MAVLink.MAV_CMD.FLASH_BOOTLOADER, 0, 0, 0, 0, 290876, 0, 0))
+                "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int) DialogResult.Yes)
+                if (CustomMessageBox.Show(
+                    "Are you sure you want to upgrade the bootloader? This can brick your board, Please allow 5 mins for this process",
+                    "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int) DialogResult.Yes)
+                    try
                     {
-                        CustomMessageBox.Show("Upgraded bootloader");
+                        if (MainV2.comPort.doCommand((byte) MainV2.comPort.sysidcurrent,
+                            (byte) MainV2.comPort.compidcurrent, MAVLink.MAV_CMD.FLASH_BOOTLOADER, 0, 0, 0, 0, 290876,
+                            0, 0))
+                        {
+                            CustomMessageBox.Show("Upgraded bootloader");
+                        }
+                        else
+                        {
+                            CustomMessageBox.Show("Failed to upgrade bootloader");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        CustomMessageBox.Show("Failed to upgrade bootloader");
+                        CustomMessageBox.Show(ex.ToString(), Strings.ERROR);
                     }
         }
 
@@ -1069,8 +1088,16 @@ namespace MissionPlanner
             {
                 var rate = int.Parse(cmbrate.Text.ToString());
                 var value = Enum.Parse(typeof(MAVLink.MAVLINK_MSG_ID), cmb.Text.ToString());
-                MainV2.comPort.doCommand((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float)(int)value,
-                    1 / (float)rate * 1000000.0f, 0, 0, 0, 0, 0);
+                try
+                {
+                    MainV2.comPort.doCommand((byte) MainV2.comPort.sysidcurrent, (byte) MainV2.comPort.compidcurrent,
+                        MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float) (int) value,
+                        1 / (float) rate * 1000000.0f, 0, 0, 0, 0, 0);
+                }
+                catch (Exception ex)
+                {
+                    CustomMessageBox.Show(ex.ToString(), Strings.ERROR);
+                }
             };
 
             Button but2 = new Button();
@@ -1081,8 +1108,16 @@ namespace MissionPlanner
                 ((IList)cmb.DataSource).ForEach(a =>
                {
                    var value = Enum.Parse(typeof(MAVLink.MAVLINK_MSG_ID), a.ToString());
-                   MainV2.comPort.doCommand((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float)(int)value,
-                       1 / (float)rate * 1000000.0f, 0, 0, 0, 0, 0, false);
+                   try
+                   {
+                       MainV2.comPort.doCommand((byte) MainV2.comPort.sysidcurrent, (byte) MainV2.comPort.compidcurrent,
+                           MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float) (int) value,
+                           1 / (float) rate * 1000000.0f, 0, 0, 0, 0, 0, false);
+                   }
+                   catch (Exception ex)
+                   {
+                       CustomMessageBox.Show(ex.ToString(), Strings.ERROR);
+                   }
                });
             };
 
@@ -1108,7 +1143,7 @@ namespace MissionPlanner
         {
             if (CustomMessageBox.Show("Are you sure?", "", MessageBoxButtons.YesNo) == (int)DialogResult.Yes)
                 MainV2.comPort.setMode(
-                    new MAVLink.mavlink_set_mode_t() { custom_mode = MainV2.comPort.MAV.cs.armed ? 0u : 1u },
+                    new MAVLink.mavlink_set_mode_t() { custom_mode = (MainV2.comPort.MAV.cs.sensors_enabled.motor_control == true && MainV2.comPort.MAV.cs.sensors_enabled.seen) ? 1u : 0u },
                     MAVLink.MAV_MODE_FLAG.SAFETY_ARMED);
         }
 
@@ -1147,21 +1182,25 @@ namespace MissionPlanner
             string input = "";
             InputBox.Show("input", "enter the hex byte data", ref input, false, true);
 
+            var ishex = input.Contains("0x") || input.ToLower().Any(a => a >= 'a' && a <= 'f');
+
             var split = input.Replace("0x", ",").Split(new char[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
-            var buffer = split.Select(a => Convert.ToByte(a, 16));
+            var buffer = split.Select(a => ishex ? Convert.ToByte(a, 16) : (byte)Convert.ToInt32(a, 10));
 
             MAVLink.MavlinkParse parse = new MAVLink.MavlinkParse();
 
             var packet = parse.ReadPacket(new MemoryStream(buffer.ToArray()));
 
             CustomMessageBox.Show(packet?.ToString() +
-                                  "\n" + packet.ToJSON().WrapText(5, new[] { ',' }));
+                                  "\n" + packet.ToJSON(Formatting.Indented));
         }
 
         private void but_acbarohight_Click(object sender, EventArgs e)
         {
-            var currentQNH = MainV2.comPort.GetParam("GND_ABS_PRESS").ToString();
+            var paramname = MainV2.comPort.MAV.param.ContainsKey("GND_ABS_PRESS") ? "GND_ABS_PRESS" : "BARO1_GND_PRESS";
+
+            var currentQNH = MainV2.comPort.GetParam(paramname).ToString();
             //338.6388 pa => 100' = 30.48m
             CustomMessageBox.Show("use at your own risk!!!");
 
@@ -1172,7 +1211,7 @@ namespace MissionPlanner
             mavlinkNumericUpDown.Padding = new Padding(20);
             mavlinkNumericUpDown.ValueChanged += (o, args) =>
                 {
-                    MainV2.comPort.setParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, "GND_ABS_PRESS", (float)(double.Parse(currentQNH) + (double)mavlinkNumericUpDown.Value * 11.1));
+                    MainV2.comPort.setParam((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent, paramname, (float)(double.Parse(currentQNH) + (double)mavlinkNumericUpDown.Value * 11.1));
                 };
 
             mavlinkNumericUpDown.ShowUserControl();
@@ -1247,6 +1286,117 @@ namespace MissionPlanner
                 .Where(x => x % 2 == 0)
                 .Select(x => Convert.ToByte(hex.Substring(x, 2), 16))
                 .ToArray();
+        }
+
+        private void but_remotedflogger_Click(object sender, EventArgs e)
+        {
+            RemoteLog.StartRemoteLog(MainV2.comPort, (byte) MainV2.comPort.sysidcurrent,
+                (byte) MainV2.comPort.compidcurrent);
+        }
+
+        private void but_paramrestore_Click(object sender, EventArgs e)
+        {
+            CustomMessageBox.Show("This process make take a some time");
+
+            using (var ofd = new OpenFileDialog
+            {
+                AddExtension = true,
+                DefaultExt = ".param",
+                RestoreDirectory = true,
+                Filter = ParamFile.FileMask
+            })
+            {
+                var dr = ofd.ShowDialog();
+
+                if (dr == DialogResult.OK)
+                {
+                    var param2 = ParamFile.loadParamFile(ofd.FileName);
+
+                    ProgressReporterDialogue prd = new ProgressReporterDialogue();
+
+                    prd.DoWork += dialogue =>
+                    {
+                        List<string> fails = new List<string>();
+                        var set = 0;
+                        var alreadyset = 0;
+                        dialogue.UpdateProgressAndStatus(-1, "Get All by Name");
+                        // prefeed
+                        foreach (var d in param2)
+                        {
+                            MainV2.comPort.GetParam(MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid, d.Key,
+                                requireresponce: false);
+                        }
+
+                        dialogue.UpdateProgressAndStatus(-1, "Set Enable's");
+                        // enables
+                        foreach (var d in param2.Where(a=>a.Key.ToLower().Contains("enable")))
+                        {
+                            try
+                            {
+                                MainV2.comPort.setParam(MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid, d.Key,
+                                    d.Value);
+                            }
+                            catch
+                            {
+
+                            }
+                        }
+
+                        foreach (var d in param2)
+                        {
+                            dialogue.UpdateProgressAndStatus(-1, "Set " + d.Key);
+                            if (dialogue.doWorkArgs.CancelRequested)
+                            {
+                                dialogue.doWorkArgs.CancelAcknowledged = true;
+                                return;
+                            }
+
+                            try
+                            {
+                                if (MainV2.comPort.MAV.param.ContainsKey(d.Key) &&
+                                    MainV2.comPort.MAV.param[d.Key].Value == d.Value)
+                                {
+                                    alreadyset++;
+                                    continue;
+                                }
+
+                                MainV2.comPort.GetParam(MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid, d.Key);
+                                
+                                if (d.Key.ToLower().Contains("_id"))
+                                    MainV2.comPort.setParam(MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid, d.Key,
+                                        0,
+                                        true);
+
+                                MainV2.comPort.setParam(MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid, d.Key,
+                                    d.Value,
+                                    true);
+
+                                set++;
+                            }
+                            catch
+                            {
+                                fails.Add(d.Key);
+                            }
+                        }
+
+                        if (fails.Count > 0)
+                            CustomMessageBox.Show("Set " + set + " params \nAlready Set " 
+                                                  + alreadyset + " params \nFailed to set " 
+                                                  + fails.Aggregate((a, b) => a + "\n" + b));
+                        else
+                            CustomMessageBox.Show("Set " + set + " params \nAlready Set "
+                                                  + alreadyset + " params");
+
+                    };
+
+                    prd.RunBackgroundOperationAsync();
+                }
+            }
+        }
+
+        private void BUT_CoT_Click(object sender, EventArgs e)
+        {
+            new SerialOutputCoT().Show();
         }
     }
 }

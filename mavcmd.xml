@@ -111,6 +111,15 @@
       <Y></Y>
       <Z></Z>
     </DO_GUIDED_LIMITS>
+    <DO_WINCH>
+      <P1>winch no</P1>
+      <P2>action</P2>
+      <P3>length</P3>
+      <P4>rate</P4>
+      <X></X>
+      <Y></Y>
+      <Z></Z>
+    </DO_WINCH>
     <DO_SET_ROI>
       <P1></P1>
       <P2></P2>
@@ -166,8 +175,8 @@
       <Z></Z>
     </DO_JUMP>
     <DO_CHANGE_SPEED>
-      <P1>speed m/s</P1>
-      <P2>speed m/s</P2>
+      <P1>Type</P1>
+      <P2>Speed m/s</P2>
       <P3></P3>
       <P4></P4>
       <X></X>
@@ -439,15 +448,6 @@
       <Y></Y>
       <Z></Z>
     </DO_INVERTED_FLIGHT>
-    <DO_SET_MODE>
-      <P1>mode #</P1>
-      <P2></P2>
-      <P3></P3>
-      <P4></P4>
-      <X></X>
-      <Y></Y>
-      <Z></Z>
-    </DO_SET_MODE>
     <DO_SET_CAM_TRIGG_DIST>
       <P1>Dist (m)</P1>
       <P2></P2>
@@ -578,7 +578,7 @@
   <!-- -->
   <APRover>
     <WAYPOINT>
-      <P1></P1>
+      <P1>Delay</P1>
       <P2></P2>
       <P3></P3>
       <P4></P4>
@@ -631,15 +631,15 @@
       <Y></Y>
       <Z></Z>
     </CONDITION_DISTANCE>
-    <CONDITION_YAW>
-      <P1></P1>
-      <P2></P2>
-      <P3></P3>
+    <SET_YAW_SPEED>
+      <P1>angle(CD)</P1>
+      <P2>Speed(0..1)</P2>
+      <P3>0=Abs,1=Rel</P3>
       <P4></P4>
       <X></X>
       <Y></Y>
       <Z></Z>
-    </CONDITION_YAW>
+    </SET_YAW_SPEED>
     <DELAY>
       <P1>Seconds (or -1)</P1>
       <P2>Hour UTC (or -1)</P2>
@@ -676,15 +676,6 @@
       <Y></Y>
       <Z></Z>
     </DO_SET_REVERSE>
-    <DO_SET_MODE>
-      <P1>mode#</P1>
-      <P2></P2>
-      <P3></P3>
-      <P4></P4>
-      <X></X>
-      <Y></Y>
-      <Z></Z>
-    </DO_SET_MODE>
     <DO_SET_CAM_TRIGG_DIST>
       <P1>Dist (m)</P1>
       <P2></P2>

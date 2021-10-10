@@ -6,6 +6,7 @@ using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -261,9 +262,10 @@ namespace MissionPlanner.Log
                                         {
                                             try
                                             {
+                                                tile.Data.Position = 0;
                                                 gfx.DrawImage(Image.FromStream(tile.Data), x, y, prj.TileSize.Width,
                                                     prj.TileSize.Height);
-                                            } catch (Exception ex2) {  }
+                                            } catch (Exception) {  }
                                         }
                                     }
                                 }

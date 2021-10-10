@@ -1,4 +1,4 @@
-﻿namespace MissionPlanner
+﻿namespace MissionPlanner.Controls
 {
     partial class OSDVideo
     {
@@ -150,7 +150,6 @@
             this.hud1.lowgroundspeed = false;
             this.hud1.lowvoltagealert = false;
             this.hud1.message = "";
-            this.hud1.messagetime = new System.DateTime(((long)(0)));
             this.hud1.mode = "Manual";
             this.hud1.Name = "hud1";
             this.hud1.navpitch = 0F;
@@ -161,7 +160,7 @@
             this.hud1.Russian = false;
             this.hud1.Size = new System.Drawing.Size(832, 448);
             this.hud1.status = false;
-            this.hud1.streamjpg = ((System.IO.MemoryStream)(resources.GetObject("hud1.streamjpg")));
+            
             this.hud1.TabIndex = 4;
             this.hud1.targetalt = 0F;
             this.hud1.targetheading = 0F;

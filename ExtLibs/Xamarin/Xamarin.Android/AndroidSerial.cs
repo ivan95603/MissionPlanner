@@ -1,5 +1,7 @@
-﻿using Hoho.Android.UsbSerial.Util;
+﻿using Android.Util;
+using Hoho.Android.UsbSerial.Util;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -9,9 +11,9 @@ namespace MissionPlanner.Comms
 {
     public class AndroidSerial : Stream, ICommsSerial
     {
-        public CircularBuffer<byte> readbuffer = new CircularBuffer<byte>(1024 * 10);
-        public CircularBuffer<byte> writebuffer = new CircularBuffer<byte>(1024 * 10);
+        MemoryStream readbuffer = new MemoryStream(1024*10);
         private SerialInputOutputManager serialIoManager;
+        private string _portName;
 
         public AndroidSerial(SerialInputOutputManager serialIoManager)
         {
@@ -19,12 +21,38 @@ namespace MissionPlanner.Comms
 
             serialIoManager.DataReceived += (sender, e) =>
             {
-                foreach (var b in e.Data)
+                lock(readbuffer)
                 {
-                    readbuffer.Add(b);
+                    if (readbuffer.Position == readbuffer.Length && readbuffer.Length > 0)
+                    {
+                        //clear it
+                        readbuffer.SetLength(0);
+                        // add data
+                        readbuffer.Write(e.Data);
+                        // set readback start point
+                        readbuffer.Position = 0;
+                        // update toread
+                        BytesToRead += e.Data.Length;
+                        Android.Util.Log.Debug("AndroidSerial", "BytesToRead1 " + BytesToRead);
+                    }
+                    else
+                    {
+                        var pos = readbuffer.Position;
+                        // goto end
+                        readbuffer.Seek(0, SeekOrigin.End);
+                        //write
+                        readbuffer.Write(e.Data);
+                        // seek back to readpos
+                        readbuffer.Seek(pos, SeekOrigin.Begin);
+                        BytesToRead += e.Data.Length;
+                        Android.Util.Log.Debug("AndroidSerial", "BytesToRead2 " + BytesToRead);
+                    }
                 }
             };
-            serialIoManager.ErrorReceived += (sender, e) => {  };
+            serialIoManager.ErrorReceived += (sender, e) =>
+            {
+                Android.Util.Log.Debug("AndroidSerial", e.ExceptionObject.ToString());
+            };
         }
 
         public override bool CanRead => true;
@@ -34,18 +62,40 @@ namespace MissionPlanner.Comms
 
         public Stream BaseStream => this;
 
-        public int BaudRate { get; set; }
+        public int BaudRate
+        {
+            get { return serialIoManager.BaudRate; }
+            set
+            {
+                serialIoManager.BaudRate = value;
+                if (IsOpen)
+                {
+                    Close();
+                    Android.Util.Log.Debug("AndroidSerial", "BaudRate change to " + value);
+                    Open();
+                }
+            }
+        }
 
-        public int BytesToRead => readbuffer.Length();
+        public int BytesToRead { get; internal set; }
 
         public int BytesToWrite => 0;
 
-        public int DataBits { get; set; }
+        public int DataBits
+        {
+            get { return serialIoManager.DataBits;}
+            set { serialIoManager.DataBits = value; }
+        }
         public bool DtrEnable { get; set; }
 
         public bool IsOpen => serialIoManager.IsOpen;
 
-        public string PortName { get; set; }
+        public string PortName
+        {
+            get => _portName;
+            set => _portName = value;
+        }
+
         public int ReadBufferSize { get; set; }
         public override int ReadTimeout { get; set; }
         public bool RtsEnable { get; set; }
@@ -65,7 +115,12 @@ namespace MissionPlanner.Comms
 
         public void DiscardInBuffer()
         {
-            readbuffer.Clear();
+            lock (readbuffer)
+            {
+                readbuffer.SetLength(0);
+                readbuffer.Position = 0;
+                BytesToRead = 0;
+            }
         }
 
         public new void Dispose()
@@ -93,8 +148,8 @@ namespace MissionPlanner.Comms
         public string ReadExisting()
         {
             StringBuilder build = new StringBuilder();
-            for (int a = 0; a < readbuffer.Length(); a++)
-                build.Append((char)readbuffer.Read());
+            for (int a = 0; a < BytesToRead; a++)
+                build.Append((char) ReadByte());
             return build.ToString();
         }
 
@@ -137,7 +192,7 @@ namespace MissionPlanner.Comms
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            serialIoManager.Write(buffer.Skip(offset).Take(count).ToArray(), 250);
+            serialIoManager.Write(buffer.Skip(offset).Take(count).ToArray(), 1000);
         }
 
         public void Write(string text)
@@ -153,17 +208,29 @@ namespace MissionPlanner.Comms
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            if (buffer == null) throw new ArgumentNullException(nameof(buffer));
+            if (offset < 0) throw new ArgumentOutOfRangeException(nameof(offset));
+            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+
             var deadline = DateTime.Now.AddMilliseconds(ReadTimeout);
-            do
+            while (BytesToRead < count && DateTime.Now < deadline)
             {
                 Thread.Sleep(1);
-            } while (readbuffer.Length() < count && DateTime.Now < deadline);
-
-            var read = Math.Min(count, readbuffer.Length());
-            for (int a = 0; a < read; a++)
-            {
-                buffer[offset + a] = readbuffer.Read();
             }
+
+            if (ReadTimeout > 0 && BytesToRead == 0)
+            {
+                throw new TimeoutException("No data in serial buffer");
+            }
+
+            var read = Math.Min(count, BytesToRead);
+
+            lock (readbuffer)
+            {
+                read = readbuffer.Read(buffer, offset, read);
+                BytesToRead -= read;
+            }
+
             return read;
         }
 

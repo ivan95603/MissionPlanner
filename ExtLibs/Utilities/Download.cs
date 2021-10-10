@@ -280,16 +280,40 @@ namespace MissionPlanner.Utilities
         private static readonly ILog log =
             LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
+        public static async Task<string> PostAsync(string uri, string data)
+        {
+            var httpClient = new HttpClient();
+            var response = await httpClient.PostAsync(uri, new StringContent(data));
+
+            response.EnsureSuccessStatusCode();
+
+            string content = await response.Content.ReadAsStringAsync();
+            return await Task.Run(() => (content));
+        }
+
+        public static async Task<string> GetAsync(string uri)
+        {
+            var httpClient = new HttpClient();
+            var content = await httpClient.GetStringAsync(uri);
+            return await Task.Run(() => (content));
+        }
+
+        public static event EventHandler<HttpRequestMessage> RequestModification;
+
         public static async Task<bool> getFilefromNetAsync(string url, string saveto, Action<int, string> status = null)
         {
             try
             {
                 log.Info("Get " + url);
 
-                using (var response = await client.GetAsync(url))
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+
+                RequestModification?.Invoke(url, request);
+
+                using (var response = await client.SendAsync(request))
                 {
                     lock (log)
-                        log.Info((response).StatusCode.ToString());
+                        log.Info(url + " " +(response).StatusCode.ToString());
                     if ((response).StatusCode != HttpStatusCode.OK)
                         return false;
 
@@ -305,7 +329,7 @@ namespace MissionPlanner.Utilities
                             if ((response).Content.Headers.ContentLength == new FileInfo(saveto).Length)
                             {
                                 lock (log)
-                                    log.Info("got LastModified " + saveto + " " +
+                                    log.Info(url + " " + "got LastModified " + saveto + " " +
                                              (response).Content.Headers.LastModified +
                                              " vs " + new FileInfo(saveto).LastWriteTime);
                                 response.Dispose();

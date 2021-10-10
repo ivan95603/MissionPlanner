@@ -1,16 +1,19 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-
+using System.Threading;
 
 /// <summary>
 /// Static methods and helpers for creation and manipulation of Mavlink packets
 /// </summary>
 public static class MavlinkUtil
 {
+    public static bool UseUnsafe { get; set; } = false;
+
     /// <summary>
     /// Create a new mavlink packet object from a byte array as recieved over mavlink
     /// Endianess will be detetected using packet inspection
@@ -19,15 +22,13 @@ public static class MavlinkUtil
     /// <param name="bytearray">The bytes of the mavlink packet</param>
     /// <param name="startoffset">The position in the byte array where the packet starts</param>
     /// <returns>The newly created mavlink packet</returns>
-
     public static TMavlinkPacket ByteArrayToStructure<TMavlinkPacket>(this byte[] bytearray, int startoffset = 6)
         where TMavlinkPacket : struct
     {
-#if UNSAFE
-        return ReadUsingPointer<TMavlinkPacket>(bytearray, startoffset);
-#else
-        return ByteArrayToStructureGC<TMavlinkPacket>(bytearray, startoffset);
-#endif
+        if (UseUnsafe)
+            return ReadUsingPointer<TMavlinkPacket>(bytearray, startoffset);
+        else
+            return ByteArrayToStructureGC<TMavlinkPacket>(bytearray, startoffset);
     }
     public static TMavlinkPacket ByteArrayToStructureBigEndian<TMavlinkPacket>(this byte[] bytearray,
         int startoffset = 6) where TMavlinkPacket : struct
@@ -44,27 +45,34 @@ public static class MavlinkUtil
 
         int len = Marshal.SizeOf(obj);
 
-        IntPtr iptr = Marshal.AllocHGlobal(len);
+        IntPtr iptr = IntPtr.Zero;
 
-        //clear memory
-        for (int i = 0; i < len; i += 8)
+        try
         {
-            Marshal.WriteInt64(iptr, i, 0x00);
-        }
+            iptr = Marshal.AllocHGlobal(len);
+            //clear memory
+            for (int i = 0; i < len / 8; i++)
+            {
+                Marshal.WriteInt64(iptr, i * 8, 0x00);
+            }
 
-        for (int i = len - (len % 8); i < len; i++)
+            for (int i = len - (len % 8); i < len; i++)
+            {
+                Marshal.WriteByte(iptr, i, 0x00);
+            }
+
+            // copy byte array to ptr
+            Marshal.Copy(bytearray, startoffset, iptr, payloadlength);
+
+            obj = Marshal.PtrToStructure(iptr, obj.GetType());
+        }
+        finally
         {
-            Marshal.WriteByte(iptr, i, 0x00);
+            if(iptr != IntPtr.Zero)
+                Marshal.FreeHGlobal(iptr);
         }
-
-        // copy byte array to ptr
-        Marshal.Copy(bytearray, startoffset, iptr, payloadlength);
-
-        obj = Marshal.PtrToStructure(iptr, obj.GetType());
-
-        Marshal.FreeHGlobal(iptr);
     }
-
+    
     public static TMavlinkPacket ByteArrayToStructureT<TMavlinkPacket>(byte[] bytearray, int startoffset)
     {
         if (bytearray == null || bytearray.Length < startoffset)
@@ -102,7 +110,6 @@ public static class MavlinkUtil
             Array.Resize(ref payload, length);
         return payload;
     }
-#if UNSAFE
     public static T ReadUsingPointer<T>(byte[] data, int startoffset) where T : struct
     {
         if (data == null || data.Length < (startoffset))
@@ -115,7 +122,7 @@ public static class MavlinkUtil
             }
         }
     }
-#endif
+
     public static T ByteArrayToStructureGC<T>(byte[] bytearray, int startoffset) where T : struct
     {
         GCHandle gch = GCHandle.Alloc(bytearray, GCHandleType.Pinned);
@@ -126,6 +133,71 @@ public static class MavlinkUtil
         finally
         {
             gch.Free();
+        }
+    }
+
+    static MavlinkUtil()
+    {
+        var no = 4;
+
+        handle = new GCHandle[no];
+        gcbuffer = new byte[no][];
+        semaphore = new SemaphoreSlim(no);
+        freebuffers = new ConcurrentStack<int>();
+
+        for (int a = 0; a < no; a++) {
+            gcbuffer[a] = new byte[4096];
+            handle[a] = GCHandle.Alloc(gcbuffer[a], GCHandleType.Pinned);           
+            freebuffers.Push(a);
+        }            
+    }
+
+    static readonly byte[][] gcbuffer;
+    static readonly GCHandle[] handle;
+    static readonly SemaphoreSlim semaphore;
+    static readonly ConcurrentStack<int> freebuffers;
+
+    public static object ByteArrayToStructureGC(byte[] bytearray, Type typeinfoType, byte startoffset, byte payloadlength)
+    {
+        semaphore.Wait();
+        int bufferindex = 0;
+        if (freebuffers.TryPop(out bufferindex)) { 
+            try {           
+                // copy it
+                var len = Marshal.SizeOf(typeinfoType);
+                if (len - payloadlength > 0)
+                    Array.Clear(gcbuffer[bufferindex], payloadlength, len - payloadlength);
+                Buffer.BlockCopy(bytearray, startoffset, gcbuffer[bufferindex], 0, payloadlength);
+                    // structure it
+                return Marshal.PtrToStructure(handle[bufferindex].AddrOfPinnedObject(), typeinfoType);
+            }
+            finally
+            {
+                freebuffers.Push(bufferindex);
+                semaphore.Release();
+            }
+        }
+
+        semaphore.Release();
+
+        throw new InvalidOperationException("Failed to get free buffer");
+    }
+
+    public static object ByteArrayToStructureGCArray(byte[] bytearray, Type typeinfoType, byte startoffset, byte payloadlength)
+    {
+        // copy it
+        var data = new byte[Marshal.SizeOf(typeinfoType)];
+        Array.Copy(bytearray, startoffset, data, 0, payloadlength);
+        // pin it
+        GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+        try
+        {
+            // structure it
+            return Marshal.PtrToStructure(handle.AddrOfPinnedObject(), typeinfoType);
+        }
+        finally
+        {
+            handle.Free();
         }
     }
 
@@ -191,6 +263,34 @@ public static class MavlinkUtil
     /// <remarks>Note - assumes little endian host order</remarks>
     public static byte[] StructureToByteArray(object obj)
     {
+        try
+        {
+            // fix's byte arrays that are too short or too long
+            obj.GetType().GetFields()
+                .Where(a => a.FieldType.IsArray && a.FieldType.UnderlyingSystemType == typeof(byte[]))
+                .Where(a =>
+                {
+                    var attributes = a.GetCustomAttributes(typeof(MarshalAsAttribute), false);
+                    if (attributes.Length > 0)
+                    {
+                        MarshalAsAttribute marshal = (MarshalAsAttribute) attributes[0];
+                        int sizeConst = marshal.SizeConst;
+                        var data = ((byte[]) a.GetValue(obj));
+                        if (data == null)
+                        {
+                            data = new byte[sizeConst];
+                        }
+                        else if (data.Length != sizeConst)
+                        {
+                            Array.Resize(ref data, sizeConst);
+                            a.SetValue(obj, data);
+                        }
+                    }
+
+                    return false;
+                }).ToList();
+        } catch {}
+
         int len = Marshal.SizeOf(obj);
         byte[] arr = new byte[len];
         IntPtr ptr = Marshal.AllocHGlobal(len);

@@ -1,13 +1,16 @@
 ﻿using MissionPlanner.Comms;
 using MissionPlanner.Utilities;
+using Mono.Unix;
 using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using UAVCAN;
 
 namespace Ntrip
 {
@@ -28,6 +31,7 @@ namespace Ntrip
                 Thread.Sleep(1000);
             };
             var tcp = TcpListener.Create(2101);
+            Console.WriteLine("Listerning on 2101");
 
             tcp.Start();
 
@@ -35,13 +39,39 @@ namespace Ntrip
 
             var ubx = new Ubx();
             var rtcm = new rtcm3();
+            var can = new UAVCAN.uavcan();
             Stream file = null;
             DateTime filetime = DateTime.MinValue;
             SerialPort port = null;
             everyminute = DateTime.Now.Minute;
 
             Directory.SetCurrentDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
-            
+
+            // setup allocator
+            can.SourceNode = 127;
+            can.SetupDynamicNodeAllocator();
+
+            // feed the rtcm data into the rtcm parser if we get a can message
+            can.MessageReceived += (frame, msg, id) =>
+            {
+                if (frame.MsgTypeID == (ushort)uavcan.UAVCAN_EQUIPMENT_GNSS_RTCMSTREAM_DT_ID)
+                {
+                    var rtcmcan = (uavcan.uavcan_equipment_gnss_RTCMStream)msg;
+
+                    for (int a = 0; a < rtcmcan.data_len; a++)
+                    {
+                        int seenmsg = -1;
+
+                        if ((seenmsg = rtcm.Read(rtcmcan.data[a])) > 0)
+                        {
+                            Console.WriteLine("CANRTCM" + seenmsg);
+                            gotRTCMData?.Invoke(rtcm.packet, rtcm.length);
+                            file.Write(rtcm.packet, 0, rtcm.length);
+                        }
+                    }
+                }
+            };
+
             while (!stop)
             {
                 try
@@ -50,7 +80,7 @@ namespace Ntrip
                     {
                         var comport = args[0];
                         if (comport.Contains("/dev/"))
-                            comport = Mono.Unix.UnixPath.GetRealPath(comport);
+                            comport = UnixPath.GetRealPath(comport);
                         Console.WriteLine("Port: " + comport);
                         port = new SerialPort(comport, 115200);
 
@@ -101,12 +131,16 @@ namespace Ntrip
                                 rtcm.resetParser();
                                 //Console.WriteLine(DateTime.Now + " new ubx message");
                             }
-                            else if (by >= 0 && rtcm.Read((byte) by) > 0)
+                            if (by >= 0 && rtcm.Read((byte) by) > 0)
                             {
                                 ubx.resetParser();
                                 //Console.WriteLine(DateTime.Now + " new rtcm message");
                                 gotRTCMData?.Invoke(rtcm.packet, rtcm.length);
-                                file.Write(new ReadOnlySpan<byte>(rtcm.packet, 0, rtcm.length));
+                                file.Write(rtcm.packet, 0, rtcm.length);
+                            }
+                            if ((by >= 0 && can.Read(by) > 0))// can_rtcm
+                            {
+                                ubx.resetParser();
                             }
                         }
                     }
@@ -121,7 +155,7 @@ namespace Ntrip
                                 port.Close();
                                 port = null;
                             }
-                            catch (Exception ex)
+                            catch (Exception)
                             {
                                 port = null;
                             }
@@ -133,17 +167,19 @@ namespace Ntrip
                 catch (UnauthorizedAccessException ex)
                 {
                     Console.WriteLine(ex);
+                    Thread.Sleep(5000);
                 }
                 catch (IOException ex)
                 {
                     Console.WriteLine(ex);
+                    Thread.Sleep(1000);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex);
                 }
 
-                Thread.Sleep(100);
+                Thread.Sleep(10);
             }
 
             if (file != null)
@@ -164,7 +200,7 @@ namespace Ntrip
 
             Task.Run(() =>
             {
-                Program.DataEventHandler func = async (data, length) =>
+                Program.DataEventHandler func = (data, length) =>
                 {
                     try
                     {
@@ -176,8 +212,20 @@ namespace Ntrip
                 };
                 try
                 {
-                    Program.gotRTCMData += func;
+                    var request = new StreamReader(client.GetStream(), Encoding.ASCII).ReadLine();
 
+                    if (request.Contains(" / "))
+                    {
+                        var data2 =
+                            "SOURCETABLE 200 OK\r\nContent-Type: text/plain\r\n\r\nSTR;DEFAULT;Default;RTCM 3.2;;2;GPS+GLO+GLO+BDS;MP;;0.00;0.00;0;0;sNTRIP;none;N;N;0;none;\r\nENDSOURCETABLE\r\n\r\n"
+                                .Select(a => (byte) a).ToArray();
+                        client.GetStream().Write(data2, 0, data2.Length);
+                        client.Close();
+                        return;
+                    }
+
+                    Program.gotRTCMData += func;
+                    
                     var data = "ICY 200 OK\r\n\r\n".Select(a => (byte)a).ToArray();
                     client.GetStream().Write(data, 0, data.Length);
 
