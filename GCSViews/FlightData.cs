@@ -149,7 +149,10 @@ namespace MissionPlanner.GCSViews
             Trigger_Camera,
             System_Time,
             Battery_Reset,
-            ADSB_Out_Ident
+            ADSB_Out_Ident,
+            SCRIPTING_CMD_STOP_AND_RESTART,
+            SCRIPTING_CMD_STOP
+
         }
 
         private Dictionary<int, string> NIC_table = new Dictionary<int, string>()
@@ -344,6 +347,7 @@ namespace MissionPlanner.GCSViews
             myhud.skyColor2 = ThemeManager.HudSkyBot;
             myhud.hudcolor = ThemeManager.HudText;
 
+            hud1.displayicons = Settings.Instance.GetBoolean("HUD_showicons", false);
         }
 
         public void Activate()
@@ -2070,8 +2074,10 @@ namespace MissionPlanner.GCSViews
         {
             (sender as Form).SaveStartupLocation();
             //GetFormFromGuid(GetOrCreateGuid("fd_hud_guid")).Controls.Add(hud1);
-            SubMainLeft.Panel1.Controls.Add(hud1);
-            SubMainLeft.Panel1Collapsed = false;
+            ((sender as Form).Tag as Control).Controls.Add(hud1);
+            //SubMainLeft.Panel1.Controls.Add(hud1);
+            if (hud1.Parent == SubMainLeft.Panel1)
+                SubMainLeft.Panel1Collapsed = false;
             huddropout = false;
         }
 
@@ -2578,11 +2584,11 @@ namespace MissionPlanner.GCSViews
 
             GStreamer.LookForGstreamer();
 
-            if (!File.Exists(GStreamer.gstlaunch))
+            if (!GStreamer.gstlaunchexists)
             {
                 GStreamerUI.DownloadGStreamer();
 
-                if (!File.Exists(GStreamer.gstlaunch))
+                if (!GStreamer.gstlaunchexists)
                 {
                     return;
                 }
@@ -2684,10 +2690,12 @@ namespace MissionPlanner.GCSViews
             if (huddropout)
                 return;
 
-            SubMainLeft.Panel1Collapsed = true;
+            if(hud1.Parent == SubMainLeft.Panel1)
+                SubMainLeft.Panel1Collapsed = true;
             Form dropout = new Form();
             dropout.Text = "HUD Dropout";
             dropout.Size = new Size(hud1.Width, hud1.Height + 20);
+            dropout.Tag = hud1.Parent;
             SubMainLeft.Panel1.Controls.Remove(hud1);
             dropout.Controls.Add(hud1);
             dropout.Resize += dropout_Resize;
@@ -4104,11 +4112,11 @@ namespace MissionPlanner.GCSViews
 
                 GStreamer.LookForGstreamer();
 
-                if (!File.Exists(GStreamer.gstlaunch))
+                if (!GStreamer.gstlaunchexists)
                 {
                     GStreamerUI.DownloadGStreamer();
 
-                    if (!File.Exists(GStreamer.gstlaunch))
+                    if (!GStreamer.gstlaunchexists)
                     {
                         return;
                     }
@@ -5561,6 +5569,20 @@ namespace MissionPlanner.GCSViews
                 Squawk_nud.Enabled = false;
 
                 XPDRConnect_btn.Text = "Connect to Transponder";
+            }
+        }
+
+        private void showIconsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            myhud.displayicons = !myhud.displayicons;
+            Settings.Instance["HUD_showicons"] = myhud.displayicons.ToString();
+            if (myhud.displayicons)
+            {
+                showIconsToolStripMenuItem.Text = "Show text";
+            }
+            else
+            {
+                showIconsToolStripMenuItem.Text = "Show icons";
             }
         }
     }

@@ -50,6 +50,7 @@ using View = Android.Views.View;
 
 [assembly: UsesFeature("android.hardware.usb.host", Required = false)]
 [assembly: UsesFeature("android.hardware.bluetooth", Required = false)]
+[assembly: UsesFeature(GLESVersion = 0x00030000, Required = true)]
 [assembly: UsesLibrary("org.apache.http.legacy", false)]
 [assembly: UsesPermission("android.permission.RECEIVE_D2D_COMMANDS")]
 //[assembly: UsesPermission("android.permission.MANAGE_EXTERNAL_STORAGE")]
@@ -205,10 +206,26 @@ namespace Xamarin.Droid
             Log.Info("MP", "Settings.CustomUserDataDirectory " + Settings.CustomUserDataDirectory);
 
             try { 
+                WinForms.Android = true;
                 WinForms.BundledPath = Application.Context.ApplicationInfo.NativeLibraryDir;
                 GStreamer.BundledPath = Application.Context.ApplicationInfo.NativeLibraryDir;
+                GStreamer.Android = true;
             } catch { }
             Log.Info("MP", "WinForms.BundledPath " + WinForms.BundledPath);
+
+            try
+            {
+                var am = (ActivityManager)Application.Context.GetSystemService(Context.ActivityService);
+
+                var devinfo = am?.DeviceConfigurationInfo;
+
+                if (devinfo != null)
+                {
+                    Log.Info("MP", "opengl es version " + devinfo.GlEsVersion);
+                    Log.Info("MP", "opengl es app req " + devinfo.ReqGlEsVersion);
+                }
+            }
+            catch { }
 
             try
             {
@@ -306,7 +323,17 @@ namespace Xamarin.Droid
             }
 
             GC.Collect();
-            /*
+
+            try
+            {
+                Java.Lang.JavaSystem.LoadLibrary("gdal");
+
+                Java.Lang.JavaSystem.LoadLibrary("gdalalljni");
+
+                Java.Lang.JavaSystem.LoadLibrary("gdalwrap");
+            }
+            catch (System.Exception ex) { Log.Error("GDAL", ex.ToString()); }
+
             Task.Run(() =>
             {
                 var gdaldir = Settings.GetRunningDirectory() + "gdalimages";
@@ -318,11 +345,47 @@ namespace Xamarin.Droid
 
                 GMap.NET.MapProviders.GMapProviders.List.Add(GDAL.GDALProvider.Instance);
             });
-            */
+            
 
             DoToastMessage("Launch App");
 
             LoadApplication(new App());
+        }
+
+        public override bool OnGenericMotionEvent(MotionEvent e)
+        {
+            if(e.Source == InputSourceType.Joystick)
+            {
+                Log.Debug(TAG, "OnGenericMotionEvent Joystick");
+                var xrange = e.Device?.GetMotionRange(Axis.X, e.Source);
+                var x = e.GetAxisValue(Axis.X);
+
+                var yrange = e.Device?.GetMotionRange(Axis.Y, e.Source);
+                var y = e.GetAxisValue(Axis.Y);
+
+                var zrange = e.Device?.GetMotionRange(Axis.Z, e.Source);
+                var z = e.GetAxisValue(Axis.Z);
+
+                var rzrange = e.Device?.GetMotionRange(Axis.Rz, e.Source);
+                var rz = e.GetAxisValue(Axis.Rz);
+
+                x = (float)MathHelper.mapConstrained(x, xrange.Min, xrange.Max, -1, 1);
+
+                y = (float)MathHelper.mapConstrained(y, yrange.Min, yrange.Max, -1, 1);
+
+                z = (float)MathHelper.mapConstrained(z, zrange.Min, zrange.Max, -1, 1);
+
+                rz = (float)MathHelper.mapConstrained(rz, rzrange.Min, rzrange.Max, -1, 1);
+
+                Log.Debug(TAG, $"OnGenericMotionEvent Joystick  {x} {y} {z} {rz}");
+            }
+
+            if (e.Source == InputSourceType.Gamepad)
+            {
+                Log.Debug(TAG, "OnGenericMotionEvent Gamepad");
+            }
+
+            return base.OnGenericMotionEvent(e);
         }
 
         public override bool OnKeyDown([GeneratedEnum] Keycode keyCode, KeyEvent e)

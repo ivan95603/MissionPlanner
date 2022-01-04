@@ -353,6 +353,22 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
             set { SITL.BundledPath = value; }
         }
 
+        public static bool Android
+        {
+            get { return MainV2.Android; }
+            set { MainV2.Android = value; }
+        }
+        public static bool IOS
+        {
+            get { return MainV2.IOS; }
+            set { MainV2.IOS = value; }
+        }
+        public static bool OSX
+        {
+            get { return MainV2.OSX; }
+            set { MainV2.OSX = value; }
+        }
+
         public static Action InitDevice
         {
             get => _initDevice;
@@ -427,6 +443,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                             return;
 
                         var focusctl = Control.FromHandle(_focusWindow);
+                        if (focusctl == null)
+                            return;
                         var p = focusctl.PointToClient(Form.MousePosition);
 
                         var handlectl = Control.FromHandle(handle);
@@ -865,8 +883,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                                 SKRect.Create(x, y, hwnd.width - borders.right - borders.left,
                                     hwnd.height - borders.top - borders.bottom), SKClipOperation.Intersect);
 
-                            Canvas.DrawImage(hwnd.hwndbmp,
-                                new SKPoint(x, y), paint);
+                            Canvas.DrawDrawable(hwnd.hwndbmp,
+                                new SKPoint(x, y));
 
                             wasdrawn = true;
                         }
@@ -886,8 +904,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                     {
                         if (hwnd.DrawNeeded || forcerender)
                         {
-                            Canvas.DrawImage(hwnd.hwndbmp,
-                                new SKPoint(x + 0, y + 0), paint);
+                            Canvas.DrawDrawable(hwnd.hwndbmp,
+                                new SKPoint(x + 0, y + 0));
 
                             wasdrawn = true;
                         }

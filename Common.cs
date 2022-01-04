@@ -24,7 +24,7 @@ namespace MissionPlanner
 
             if(overlay!= null)
             {
-                var existing = overlay.Markers.Where((a)=>a.Tag == MAV);                
+                var existing = overlay.Markers.Where((a)=>a.Tag == MAV).ToArray();                
                 if (existing.Count() > 1)
                 {
                     existing.Skip(1).ToArray().ForEach((a) => { overlay.Markers.Remove(a);});
@@ -58,7 +58,7 @@ namespace MissionPlanner
                         itemr.Position = portlocation;
                         itemr.Heading = MAV.cs.yaw;
                         itemr.Cog = MAV.cs.groundcourse;
-                        itemr.Target = MAV.cs.nav_bearing;
+                        itemr.Target = MAV.cs.target_bearing;
                         itemr.Nav_bearing = MAV.cs.nav_bearing;
                         return null;
                     }
