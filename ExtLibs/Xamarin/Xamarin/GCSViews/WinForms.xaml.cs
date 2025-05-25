@@ -30,6 +30,9 @@ using Point = System.Drawing.Point;
 using Rectangle = System.Drawing.Rectangle;
 using MissionPlanner.Controls;
 using System.Globalization;
+using log4net;
+using System.Text.RegularExpressions;
+using Size = System.Drawing.Size;
 
 namespace Xamarin.GCSViews
 {
@@ -45,7 +48,9 @@ namespace Xamarin.GCSViews
             InitializeComponent();
 
             size = Device.Info.ScaledScreenSize;
+            Console.WriteLine("ScaledScreenSize " + size);
             size = Device.Info.PixelScreenSize;
+            Console.WriteLine("PixelScreenSize " + size);
 
             Xamarin.Forms.Platform.WinForms.Forms.UIThread = Thread.CurrentThread.ManagedThreadId;
 
@@ -74,23 +79,24 @@ namespace Xamarin.GCSViews
                 }
             }
 
+            Console.WriteLine("Final Size " + size);
+
             Instance = this;
             try
             {
-                MainV2.speechEngine = new Speech();
+                if (Test.Speech != null)
+                    MainV2.speechEngine = Test.Speech;
+                else
+                    MainV2.speechEngine = new Speech();
             } catch{}
 
             RestoreFiles();
 
+            FileDialog.CustomDirectory = Settings.GetUserDataDirectory();
+
             // init seril port type
             SerialPort.DefaultType = (self, s, i) =>
             {
-                if (Device.RuntimePlatform == Device.macOS)
-                {
-                    Log.Info(TAG, "SerialPort.DefaultType in " + s + " " + i + " for " + Device.RuntimePlatform);
-                    return new MonoSerialPort();
-                }
-
                 return Task.Run(async () =>
                 {
                     Log.Info(TAG, "SerialPort.DefaultType in " + s + " " + i);
@@ -103,7 +109,7 @@ namespace Xamarin.GCSViews
                     }
                     else
                     {
-                        if (s.StartsWith("BT_"))
+                        if (s.StartsWith("BT_") || s.StartsWith("BLE_"))
                         {
                             var bt = await Test.BlueToothDevice.GetDeviceInfoList();
 
@@ -156,6 +162,16 @@ namespace Xamarin.GCSViews
                                 return await Test.UsbDevices.GetUSB(di.First());
                             }
                         }
+
+                        if (Device.RuntimePlatform == Device.macOS || s != null && File.Exists(s))
+                        {
+                            Log.Info(TAG, "SerialPort.DefaultType in " + s + " " + i + " for " + Device.RuntimePlatform);
+                            if (s != null && i > 0)
+                                return new MonoSerialPort(s, i);
+                            if(s!= null)
+                                return new MonoSerialPort(s);
+                            return new MonoSerialPort();
+                        }
                     }
 
                     Log.Info(TAG, "SerialPort.DefaultType passthrough no board match");
@@ -184,17 +200,20 @@ namespace Xamarin.GCSViews
 
                 return list1;
             };
-            /*
-// support for fw upload
-MissionPlanner.GCSViews.ConfigurationView.ConfigFirmwareManifest.ExtraDeviceInfo += () =>
-{
-    return Task.Run(async () => { return await Test.UsbDevices.GetDeviceInfoList(); }).Result;
-};
 
-MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =>
-{
-    return Task.Run(async () => { return await Test.UsbDevices.GetDeviceInfoList(); }).Result;
-};*/
+            if (Device.RuntimePlatform == Device.macOS)
+            {
+                // support for fw upload
+                MissionPlanner.GCSViews.ConfigurationView.ConfigFirmwareManifest.ExtraDeviceInfo += () =>
+                {
+                    return Task.Run(async () => { return await Test.UsbDevices.GetDeviceInfoList(); }).Result;
+                };
+
+                MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =>
+                {
+                    return Task.Run(async () => { return await Test.UsbDevices.GetDeviceInfoList(); }).Result;
+                };
+            }
         }
 
         // Calculates the checksum for a sentence
@@ -272,16 +291,16 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                     Settings.GetUserDataDirectory() + Path.DirectorySeparatorChar + "mavcmd.xml", 
                     files.mavcmd);
 
-
+                /*
                 try {
                         var pluginsdir = Settings.GetRunningDirectory() + "plugins";
                         Directory.CreateDirectory(pluginsdir);
 
                         string[] files = new[]
                         {
-                            "example2menu", "example3fencedist", "example4herelink", "example5latencytracker",
-                            "example6mapicondesc", "example7canrtcm", "example8modechange", "example9hudonoff",
-                            "examplewatchbutton", "generator", "InitialParamsCalculator"
+                            "example10_canlogfile", "example11_trace", "example3_fencedist", "example4_herelink",
+                            "example5_latencytracker", "example6_mapicondesc", "example7_canrtcm", "example8_modechange",
+                            "example9_hudonoff", "generator"
                         };
 
                         foreach (var file in files)
@@ -299,12 +318,9 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                                     File.Delete(filename);
                                 }
 
-                                /*
-                                File.WriteAllText(filename
-                                    ,
-                                    new StreamReader(
-                                        Resources.OpenRawResource(id)).ReadToEnd());
-                                */
+
+                                File.WriteAllText(filename, MissionPlanner.files.ResourceManager.GetString(file));
+
                             }
                             catch
                             {
@@ -312,7 +328,7 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                             }
                         }
                     } catch { }
-
+                    */
                     try {
                         var graphsdir = Settings.GetRunningDirectory() + "graphs";
                         Directory.CreateDirectory(graphsdir);
@@ -374,6 +390,26 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
             get => _initDevice;
             set => _initDevice = value;
         }
+
+        public static void Exit()
+        {
+            Application.Exit();
+        }
+
+        public static void Resize(int width, int height)
+        {
+            Instance.size = new Forms.Size(width, height);
+            Screen.PrimaryScreen.Bounds = new Rectangle(0, 0, width, height);
+            Screen.PrimaryScreen.WorkingArea = new Rectangle(0, 0, width, height);
+            var pos = new XplatUIMine.tagWINDOWPOS() {cx = width, cy = height + XplatUIMine.GetInstance().CaptionHeight, flags = 0x2, x = 0, y = 0};
+            int size = Marshal.SizeOf(typeof(XplatUIMine.tagWINDOWPOS));
+            IntPtr ptr = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(pos, ptr, true);
+            XplatUIMine.GetInstance().SendMessage(IntPtr.Zero, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, ptr);
+            Marshal.FreeHGlobal(ptr);
+            //.SetWindowPos(IntPtr.Zero, 0, 0, width, height);
+        }
+        
 
         protected override void OnAppearing()
         {
@@ -547,8 +583,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
 
         private void StartThreads()
         {
-            XplatUIMine.GetInstance()._virtualScreen = new Rectangle(0, 0, (int) size.Width, (int) size.Height);
-            XplatUIMine.GetInstance()._workingArea = new Rectangle(0, 0, (int) size.Width, (int) size.Height);
+            Screen.PrimaryScreen.Bounds = new Rectangle(0, 0, (int) size.Width, (int) size.Height);
+            Screen.PrimaryScreen.WorkingArea = new Rectangle(0, 0, (int) size.Width, (int) size.Height);
 
             winforms = new Thread(() =>
             {
@@ -584,9 +620,9 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                         Instance.scale = new Forms.Size((Instance.SkCanvasView.CanvasSize.Width / Instance.size.Width),
                             (Instance.SkCanvasView.CanvasSize.Height / Instance.size.Height));
 
-                        XplatUIMine.GetInstance()._virtualScreen =
+                        Screen.PrimaryScreen.WorkingArea =
                             new Rectangle(0, 0, (int) Instance.size.Width, (int) Instance.size.Height);
-                        XplatUIMine.GetInstance()._workingArea =
+                        Screen.PrimaryScreen.Bounds =
                             new Rectangle(0, 0, (int) Instance.size.Width, (int) Instance.size.Height);
 
                         Device.BeginInvokeOnMainThread(() => { Instance.SkCanvasView.InvalidateSurface(); });
@@ -815,157 +851,6 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
             } catch {}
         }
 
-        private SKPaint paint = new SKPaint() {FilterQuality = SKFilterQuality.Low};
-
-   private bool DrawOntoCanvas(IntPtr handle, SKCanvas Canvas, bool forcerender = false)
-        {
-            var hwnd = Hwnd.ObjectFromHandle(handle);
-
-            var x = 0;
-            var y = 0;
-            var wasdrawn = false;
-
-            XplatUI.driver.ClientToScreen(hwnd.client_window, ref x, ref y);
-
-            var width = 0;
-            var height = 0;
-            var client_width = 0;
-            var client_height = 0;
-
-
-            if (hwnd.hwndbmp != null && hwnd.Mapped && hwnd.Visible && !hwnd.zombie)
-            {
-                // setup clip
-                var parent = hwnd;
-                Canvas.ClipRect(
-                    SKRect.Create(0, 0, Screen.PrimaryScreen.Bounds.Width*2,
-                        Screen.PrimaryScreen.Bounds.Height*2), (SKClipOperation) 5);
-
-                while (parent != null)
-                {
-                    var xp = 0;
-                    var yp = 0;
-                    XplatUI.driver.ClientToScreen(parent.client_window, ref xp, ref yp);
-
-                    Canvas.ClipRect(SKRect.Create(xp, yp, parent.Width, parent.Height),
-                        SKClipOperation.Intersect);
-
-                    parent = parent.parent;
-                }
-
-                Monitor.Enter(XplatUIMine.paintlock);
-
-                if (hwnd.ClientWindow != hwnd.WholeWindow)
-                {
-                    var frm = Control.FromHandle(hwnd.ClientWindow) as Form;
-
-                    Hwnd.Borders borders = new Hwnd.Borders();
-
-                    if (frm != null)
-                    {
-                        borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
-
-                        Canvas.ClipRect(
-                            SKRect.Create(0, 0, Screen.PrimaryScreen.Bounds.Width*2,
-                                Screen.PrimaryScreen.Bounds.Height*2), (SKClipOperation) 5);
-                    }
-
-                    if (Canvas.DeviceClipBounds.Width > 0 &&
-                        Canvas.DeviceClipBounds.Height > 0)
-                    {
-                        if (hwnd.DrawNeeded || forcerender)
-                        {
-                            if (hwnd.hwndbmpNC != null)
-                                Canvas.DrawImage(hwnd.hwndbmpNC,
-                                    new SKPoint(x - borders.left, y - borders.top), paint);
-
-                            Canvas.ClipRect(
-                                SKRect.Create(x, y, hwnd.width - borders.right - borders.left,
-                                    hwnd.height - borders.top - borders.bottom), SKClipOperation.Intersect);
-
-                            Canvas.DrawDrawable(hwnd.hwndbmp,
-                                new SKPoint(x, y));
-
-                            wasdrawn = true;
-                        }
-
-                        hwnd.DrawNeeded = false;
-                    }
-                    else
-                    {
-                        Monitor.Exit(XplatUIMine.paintlock);
-                        return true;
-                    }
-                }
-                else
-                {
-                    if (Canvas.DeviceClipBounds.Width > 0 &&
-                        Canvas.DeviceClipBounds.Height > 0)
-                    {
-                        if (hwnd.DrawNeeded || forcerender)
-                        {
-                            Canvas.DrawDrawable(hwnd.hwndbmp,
-                                new SKPoint(x + 0, y + 0));
-
-                            wasdrawn = true;
-                        }
-
-                        hwnd.DrawNeeded = false;
-/*
-                        surface.Canvas.DrawText(Control.FromHandle(hwnd.ClientWindow).Name,
-                            new SKPoint(x, y + 15),
-                            new SKPaint() {Color = SKColor.Parse("55ffff00")});
-                        /*surface.Canvas.DrawText(hwnd.ClientWindow.ToString(), new SKPoint(x,y+15),
-                            new SKPaint() {Color = SKColor.Parse("ffff00")});*/
-
-                    }
-                    else
-                    {
-                        Monitor.Exit(XplatUIMine.paintlock);
-                        return true;
-                    }
-                }
-
-                Monitor.Exit(XplatUIMine.paintlock);
-            }
-
-            //surface.Canvas.DrawText(x + " " + y, x, y+10, new SKPaint() { Color =  SKColors.Red});
-
-            if (hwnd.Mapped && hwnd.Visible)
-            {
-                IEnumerable<Hwnd> children;
-                lock (Hwnd.windows)
-                    children = Hwnd.windows.OfType<System.Collections.DictionaryEntry>()
-                        .Where(hwnd2 =>
-                        {
-                            var Key = (IntPtr) hwnd2.Key;
-                            var Value = (Hwnd) hwnd2.Value;
-                            if (Value.ClientWindow == Key && Value.Parent == hwnd && Value.Visible &&
-                                Value.Mapped && !Value.zombie)
-                                return true;
-                            return false;
-                        }).Select(a => (Hwnd) a.Value).ToArray();
-
-                children = children.OrderBy((hwnd2) =>
-                {
-                    var info = XplatUIMine.GetInstance().GetZOrder(hwnd2.client_window);
-                    if (info.top)
-                        return 1000;
-                    if (info.bottom)
-                        return 0;
-                    return 500;
-
-                });
-
-                foreach (var child in children)
-                {
-                    DrawOntoCanvas(child.ClientWindow, Canvas, true);
-                }
-            }
-
-            return true;
-        }
-
         private void SkCanvasView_PaintSurface(object sender, SkiaSharp.Views.Forms.SKPaintSurfaceEventArgs e)
         {
             SkCanvasView_PaintSurface(sender, new SKPaintGLSurfaceEventArgs(e.Surface, null));
@@ -991,7 +876,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
 
                         try
                         {
-                          DrawOntoCanvas(form.Handle, canvas, true);
+                            // skgl is not keeping the previous render. so true.
+                            FormsRender.DrawOntoCanvas(form.Handle, canvas, true);
                         }
                         catch (Exception ex)
                         {
@@ -1008,7 +894,7 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                 {
                     var ctlmenu = Control.FromHandle(hw.ClientWindow);
                         if (ctlmenu != null)
-                            DrawOntoCanvas(hw.ClientWindow, canvas, true);
+                            FormsRender.DrawOntoCanvas(hw.ClientWindow, canvas, true);
                 }
 
                 if (Device.RuntimePlatform != Device.macOS && Device.RuntimePlatform != Device.UWP)
@@ -1149,11 +1035,19 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
 
     public class Speech : ISpeech
     {
+        DateTime lastmsg = DateTime.MinValue;
+        private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
         public bool speechEnable { get; set; }
+
+        public Speech()
+        {
+
+        }
 
         public bool IsReady
         {
-            get { return !isBusy; }
+            get { if (lastmsg.AddSeconds(5) < DateTime.Now) return true;  return !isBusy; }
         }
 
         CancellationTokenSource cts;
@@ -1161,24 +1055,49 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
 
         public void SpeakAsync(string text)
         {
-            if (!speechEnable)
+            if (!MainV2.speechEnabled())
                 return;
+
+            if (text == null || String.IsNullOrWhiteSpace(text))
+                return;
+
+            text = Regex.Replace(text, @"\bPreArm\b", "Pre Arm", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\bdist\b", "distance", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\bNAV\b", "Navigation", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\b([0-9]+)m\b", "$1 meters", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\b([0-9]+)ft\b", "$1 feet", RegexOptions.IgnoreCase);
+            text = Regex.Replace(text, @"\b([0-9]+)\bbaud\b", "$1 baudrate", RegexOptions.IgnoreCase);
+
             cts = new CancellationTokenSource();
+            lastmsg = DateTime.Now;
             isBusy = true;
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await TextToSpeech.SpeakAsync(text, cts.Token).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                }
-                finally
-                {
-                    isBusy = false;
-                }
-            });
+            log.Info("TTS: say " + text);
+            _ = Task.Run(async () =>
+              {
+                  try
+                  {
+                    var locales = await TextToSpeech.GetLocalesAsync();
+
+                    // Grab the first locale
+                    var locale = locales.FirstOrDefault();
+
+                      var settings = new SpeechOptions()
+                      {
+                          Volume = 1.0f,
+                          Pitch = 1.0f,
+                          //Locale = locale
+                      };
+
+                      await TextToSpeech.SpeakAsync(text, settings, cts.Token).ConfigureAwait(false);
+                  }
+                  catch (Exception e)
+                  {
+                  }
+                  finally
+                  {
+                      isBusy = false;
+                  }
+              });
         }
 
         public void SpeakAsyncCancelAll()
@@ -1187,6 +1106,8 @@ MissionPlanner.GCSViews.ConfigurationView.ConfigFirmware.ExtraDeviceInfo += () =
                 return;
 
             cts.Cancel();
+
+            isBusy = false;
         }
     }
 

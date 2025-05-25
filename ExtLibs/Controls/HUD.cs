@@ -31,12 +31,13 @@ using SkiaSharp;
 
 namespace MissionPlanner.Controls
 {
-    public class HUD2: HUD
+    public class HUD2 : HUD
     {
-        public HUD2(): base()
+        public HUD2() : base()
         {
             started = true;
             opengl = false;
+            InitializeComponent();
         }
 
         private Bitmap bitmap;
@@ -101,6 +102,21 @@ namespace MissionPlanner.Controls
                 Bitmap.Dispose();
                 bitmap = null;
             }
+        }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            // 
+            // HUD2
+            // 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            this.hudcolor = System.Drawing.Color.LightGray;
+            this.Name = "HUD2";
+            this.Size = new System.Drawing.Size(466, 354);
+            this.VSync = false;
+            this.ResumeLayout(false);
+
         }
     }
 
@@ -197,12 +213,16 @@ namespace MissionPlanner.Controls
 
         [System.ComponentModel.Browsable(true), DefaultValue(true)]
         public bool batteryon { get; set; }
+        public bool batteryon2 { get; set; }
 
         [System.ComponentModel.Browsable(true), DefaultValue(true)]
         public bool displayekf { get; set; }
 
         [System.ComponentModel.Browsable(true), DefaultValue(true)]
         public bool displayvibe { get; set; }
+
+        [System.ComponentModel.Browsable(true), DefaultValue(true)]
+        public bool displayprearm { get; set; }
 
         [System.ComponentModel.Browsable(true), DefaultValue(true)]
         public bool displayAOASSA { get; set; }
@@ -226,11 +246,13 @@ namespace MissionPlanner.Controls
             opengl =
                 displayvibe =
                     displayekf =
-                        displayheading =
-                            displayspeed =
-                                displayalt =
-                                    displayconninfo =
-                                        displayxtrack = displayrollpitch = displaygps = bgon = hudon = batteryon = true;
+                        displayprearm =
+                            displayheading =
+                                displayspeed =
+                                    displayalt =
+                                        displayconninfo =
+                                            displayxtrack =
+                                                displayrollpitch = displaygps = bgon = hudon = batteryon = batteryon2 = true;
 
             displayAOASSA = false;
 
@@ -250,6 +272,30 @@ namespace MissionPlanner.Controls
 
             graphicsObject = this;
             graphicsObjectGDIP = new GdiGraphics(Graphics.FromImage(objBitmap));
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            log.Info("HUD Dispose");
+
+            if (opengl)
+            {
+                foreach (character texid in _texture)
+                {
+                    if (texid != null && texid.gltextureid != 0)
+                        GL.DeleteTexture(texid.gltextureid);
+                }
+
+                this._texture = new character[_texture.Length];
+
+                foreach (character texid in charDict.Values)
+                {
+                    if (texid.gltextureid != 0)
+                        GL.DeleteTexture(texid.gltextureid);
+                }
+            }
+
+            base.Dispose(disposing);
         }
 
         private float _roll = 0;
@@ -383,6 +429,20 @@ namespace MissionPlanner.Controls
         public string altunit { get; set; } = "";
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public float load
+        {
+            get { return _load; }
+            set
+            {
+                if (_load != value)
+                {
+                    _load = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public float alt
         {
             get { return _alt; }
@@ -495,6 +555,48 @@ namespace MissionPlanner.Controls
         }
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public float batterylevel2
+        {
+            get { return _batterylevel2; }
+            set
+            {
+                if (_batterylevel2 != value)
+                {
+                    _batterylevel2 = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public float batteryremaining2
+        {
+            get { return _batteryremaining2; }
+            set
+            {
+                if (_batteryremaining2 != value)
+                {
+                    _batteryremaining2 = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public float current2
+        {
+            get { return _current2; }
+            set
+            {
+                if (_current2 != value)
+                {
+                    _current2 = value;
+                    this.Invalidate();
+                }
+            }
+        }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public int batterycellcount
         {
             get { return _batterycellcount; }
@@ -532,7 +634,6 @@ namespace MissionPlanner.Controls
                 {
                     _current = value;
                     this.Invalidate();
-                    if (_current > 0) batteryon = true;
                 }
             }
         }
@@ -727,6 +828,9 @@ namespace MissionPlanner.Controls
         public bool failsafe { get; set; }
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public bool safetyactive { get; set; }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public bool lowvoltagealert { get; set; }
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
@@ -758,6 +862,9 @@ namespace MissionPlanner.Controls
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public float ekfstatus { get; set; }
+
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public bool prearmstatus { get; set; }
 
         [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
         public float AOA
@@ -1072,9 +1179,11 @@ namespace MissionPlanner.Controls
 
         public event EventHandler ekfclick;
         public event EventHandler vibeclick;
+        public event EventHandler prearmclick;
 
         Rectangle ekfhitzone = new Rectangle();
         Rectangle vibehitzone = new Rectangle();
+        Rectangle prearmhitzone = new Rectangle();
 
         protected override void OnMouseClick(MouseEventArgs e)
         {
@@ -1091,6 +1200,12 @@ namespace MissionPlanner.Controls
                 if (vibeclick != null)
                     vibeclick(this, null);
             }
+
+            if (prearmhitzone.IntersectsWith(new Rectangle(e.X, e.Y, 5, 5)) && !status) // Only when not armed
+            {
+                if (prearmclick != null)
+                    prearmclick(this, null);
+            }
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -1102,6 +1217,10 @@ namespace MissionPlanner.Controls
                 Cursor.Current = Cursors.Hand;
             }
             else if (vibehitzone.IntersectsWith(new Rectangle(e.X, e.Y, 5, 5)))
+            {
+                Cursor.Current = Cursors.Hand;
+            }
+            else if (prearmhitzone.IntersectsWith(new Rectangle(e.X, e.Y, 5, 5)) && !status) // Only when not armed
             {
                 Cursor.Current = Cursors.Hand;
             }
@@ -1248,22 +1367,32 @@ namespace MissionPlanner.Controls
                 GL.LineWidth(penn.Width);
                 GL.Color4(penn.Color);
 
-                GL.Begin(PrimitiveType.LineStrip);
+                //GL.Begin(PrimitiveType.LineStrip);
 
                 start = 360 - start;
                 start -= 30;
 
+                var vertices = new float[(int)((degrees + 1) * 2)];
+
                 float x = 0, y = 0;
+                int length = 0;
                 for (float i = start; i <= start + degrees; i++)
                 {
                     x = (float) Math.Sin(i * deg2rad) * rect.Width / 2;
                     y = (float) Math.Cos(i * deg2rad) * rect.Height / 2;
                     x = x + rect.X + rect.Width / 2;
                     y = y + rect.Y + rect.Height / 2;
-                    GL.Vertex2(x, y);
+                    vertices[(int)((i - start) * 2)] = x;
+                    vertices[(int)((i - start) * 2 + 1)] = y;
+                    length += 2;
+                    //GL.Vertex2(x, y);
                 }
 
-                GL.End();
+                //GL.End();                
+                GL.VertexPointer(2, VertexPointerType.Float, 0, vertices);
+                GL.EnableClientState(ArrayCap.VertexArray);
+                GL.DrawArrays(PrimitiveType.LineStrip, 0, length/2);
+                GL.DisableClientState(ArrayCap.VertexArray);
             }
             else
             {
@@ -1278,18 +1407,29 @@ namespace MissionPlanner.Controls
                 GL.LineWidth(penn.Width);
                 GL.Color4(penn.Color);
 
-                GL.Begin(PrimitiveType.LineLoop);
+                //GL.Begin(PrimitiveType.LineLoop);
+
+                var vertices = new float[(int)(360 * 2)];
+
                 float x, y;
+                int length = 0;
                 for (float i = 0; i < 360; i += 1)
                 {
                     x = (float) Math.Sin(i * deg2rad) * rect.Width / 2;
                     y = (float) Math.Cos(i * deg2rad) * rect.Height / 2;
                     x = x + rect.X + rect.Width / 2;
                     y = y + rect.Y + rect.Height / 2;
-                    GL.Vertex2(x, y);
+                    vertices[(int)((i) * 2)] = x;
+                    vertices[(int)((i) * 2 + 1)] = y;
+                    length += 2;
+                    //GL.Vertex2(x, y);
                 }
 
-                GL.End();
+                //GL.End();                
+                GL.VertexPointer(2, VertexPointerType.Float, 0, vertices);
+                GL.EnableClientState(ArrayCap.VertexArray);
+                GL.DrawArrays(PrimitiveType.LineLoop, 0, length / 2);
+                GL.DisableClientState(ArrayCap.VertexArray);
             }
             else
             {
@@ -1322,6 +1462,9 @@ namespace MissionPlanner.Controls
         }
 
         private character[] _texture = new character[2];
+        private float _batterylevel2;
+        private float _batteryremaining2;
+        private float _current2;
 
         public void DrawImage(Image img, int x, int y, int width, int height, int textureno = 0)
         {
@@ -1404,6 +1547,8 @@ namespace MissionPlanner.Controls
                 GL.End();
 
                 GL.Disable(EnableCap.Texture2D);
+
+                GL.BindTexture(TextureTarget.Texture2D, 0);
 
                 if (polySmoothEnabled)
                     GL.Enable(EnableCap.PolygonSmooth);
@@ -1684,8 +1829,6 @@ namespace MissionPlanner.Controls
 
                 GL.Begin(PrimitiveType.TriangleFan);
 
-                GL.LineWidth(0);
-
                 if (((Type) brushh.GetType()) == typeof(LinearGradientBrush))
                 {
                     LinearGradientBrush temp = (LinearGradientBrush) brushh;
@@ -1726,7 +1869,7 @@ namespace MissionPlanner.Controls
             DrawRectangle(penn, rect.X, rect.Y, rect.Width, rect.Height);
         }
 
-        public void DrawRectangle(Pen penn, double x1, double y1, double width, double height)
+        public void DrawRectangle(Pen penn, float x1, float y1, float width, float height)
         {
 
             if (opengl)
@@ -1746,8 +1889,8 @@ namespace MissionPlanner.Controls
                 graphicsObjectGDIP.DrawRectangle(penn, (float) x1, (float) y1, (float) width, (float) height);
             }
         }
-
-        public void DrawLine(Pen penn, double x1, double y1, double x2, double y2)
+                
+        public void DrawLine(Pen penn, float x1, float y1, float x2, float y2)
         {
 
             if (opengl)
@@ -1755,14 +1898,19 @@ namespace MissionPlanner.Controls
                 GL.Color4(penn.Color);
                 GL.LineWidth(penn.Width);
 
-                GL.Begin(PrimitiveType.Lines);
-                GL.Vertex2(x1, y1);
-                GL.Vertex2(x2, y2);
-                GL.End();
+                //GL.Begin(PrimitiveType.Lines);
+                //GL.Vertex2(x1, y1);
+                //GL.Vertex2(x2, y2);
+                //GL.End();
+
+                GL.VertexPointer(2, VertexPointerType.Float, 0, new float[] { x1, y1, x2, y2 });
+                GL.EnableClientState(ArrayCap.VertexArray);
+                GL.DrawArrays(PrimitiveType.Lines, 0, 2);
+                GL.DisableClientState(ArrayCap.VertexArray);
             }
             else
             {
-                graphicsObjectGDIP.DrawLine(penn, (float) x1, (float) y1, (float) x2, (float) y2);
+                graphicsObjectGDIP.DrawLine(penn, (float)x1, (float)y1, (float)x2, (float)y2);
             }
         }
 
@@ -2661,33 +2809,50 @@ namespace MissionPlanner.Controls
                     graphicsObject.DrawPolygon(this._whitePen, AOA_arrow);
                 }
 
+
+                // Text line positions for all text at bottom of the screen
+                int yBotOffset = (fontsize >= 8) ? (fontsize / 3) : 2; // this replaces fontoffset for bottom lines
+                int yTextOffset = (fontsize + yBotOffset + 2); // creates a 25% font size space between multiple lines
+                int xPos = fontsize; // spaces text off left 1 character
+                Int32[] yPos = new Int32[] {this.Height - 2*yTextOffset - yBotOffset - 4,  //line upper
+                                  this.Height - yTextOffset - yBotOffset - 4 };            //line lower
+                
+                //Console.WriteLine("HUD Height " + this.Height + " fontsize " + fontsize + " offset " + yBotOffset + " ypos0: " + yPos[0] + " ypos1: " + yPos[1]);
+
                 // battery
                 if (batteryon)
                 {
                     graphicsObject.ResetTransform();
 
                     SolidBrush textcolor;
-                    Image icon;
+                    Image icon = null;
                     String text;
 
                     if (criticalvoltagealert)
                     {
                         textcolor = _redBrush;
-                        icon = HUDT.batt_red;
+                        if (displayicons)
+                            icon = HUDT.batt_red;
                     }
                     else if (lowvoltagealert)
                     {
                         textcolor = _orangeBrush;
-                        icon = HUDT.batt_yellow;
+                        if (displayicons)
+                            icon = HUDT.batt_yellow;
                     }
                     else
                     {
                         textcolor = _whiteBrush;
-                        if (_batteryremaining > 75) icon = HUDT.batt_4;
-                        else if (_batteryremaining > 50) icon = HUDT.batt_3;
-                        else if (_batteryremaining > 25) icon = HUDT.batt_2;
-                        else icon = HUDT.batt_1;
+                        if (displayicons)
+                        {
+                            if (_batteryremaining > 75) icon = HUDT.batt_4;
+                            else if (_batteryremaining > 50) icon = HUDT.batt_3;
+                            else if (_batteryremaining > 25) icon = HUDT.batt_2;
+                            else icon = HUDT.batt_1;
+                        }
                     }
+
+                    int textIdx = 0;
 
                     if (displayicons)
                     {
@@ -2695,21 +2860,33 @@ namespace MissionPlanner.Controls
                         DrawImage(icon, 3, this.Height - bottomsize, bottomsize / 2, bottomsize);
 
                         text = _batterylevel.ToString("0.00v") + " " + _current.ToString("0.0 A") + " " + (_batteryremaining) + "%";
-                        drawstring(text, font, fontsize + 1, textcolor, bottomsize / 2 + 6, this.Height - ((fontsize + 2) * 3) - fontoffset);
+                        drawstring(text, font, fontsize + 1, textcolor, bottomsize / 2 + 6, yPos[1]);
                         if (displayCellVoltage & (_batterycellcount != 0))
-                            drawstring((_batterylevel / _batterycellcount).ToString("0.00v"), font, fontsize, textcolor, bottomsize / 2 + 6, this.Height - (fontsize * 2) - fontoffset);
+                            drawstring((_batterylevel / _batterycellcount).ToString("0.00v"), font, fontsize, textcolor, bottomsize / 2 + 6, yPos[0]);
 
                     }
                     else
                     {
 
-                        text = HUDT.Bat + _batterylevel.ToString("0.00v") + " " + _current.ToString("0.0 A") + " " + (_batteryremaining) + "%";
-
-                        drawstring(text, font, fontsize + 2, textcolor, fontsize,
-                            this.Height - ((fontsize + 2) * 3) - fontoffset);
-
                         if (displayCellVoltage & (_batterycellcount != 0))
-                            drawstring(HUDT.Cell + " " + (_batterylevel / _batterycellcount).ToString("0.00v"), font, fontsize + 2, textcolor, fontsize, this.Height - (fontsize * 2) - fontoffset);
+                            drawstring(HUDT.Cell + " " + (_batterylevel / _batterycellcount).ToString("0.00v"), font, fontsize + 2, textcolor, xPos, yPos[1]);
+                        else if (_batterylevel2 > 0 && batteryon2)
+                        {
+                            text = HUDT.Bat + "2 " + _batterylevel2.ToString("0.00v") + " " + _current2.ToString("0.0 A") + " " +
+                                   (_batteryremaining2) + "%";
+
+                            drawstring(text, font, fontsize, textcolor, xPos, yPos[1]);
+                        } else {
+                            textIdx=1;
+                        }
+
+                       
+
+                        text = HUDT.Bat + "1 " + _batterylevel.ToString("0.00v") + " " + _current.ToString("0.0 A") + " " + (_batteryremaining) + "%";
+                        
+                        drawstring(text, font, fontsize, textcolor, xPos, yPos[textIdx]);
+
+
                     }
                 }
 
@@ -2718,59 +2895,70 @@ namespace MissionPlanner.Controls
                 {
                     string gps = "";
                     SolidBrush col = _whiteBrush;
-                    Image icon;
+                    Image icon = null;
 
                     int a = 0;
-                    foreach (var _fix in new[] {_gpsfix, _gpsfix2})
+                    foreach (var _fix in new[] { _gpsfix, _gpsfix2 })
                     {
                         if (_fix == 0)
                         {
                             gps = (HUDT.GPS0);
-                            col = (SolidBrush) Brushes.Red;
-                            icon = HUDT.nogps_wide;
+                            col = (SolidBrush)Brushes.Red;
+                            if (displayicons)
+                                icon = HUDT.nogps_wide;
                         }
                         else if (_fix == 1)
                         {
                             gps = (HUDT.GPS1);
-                            col = (SolidBrush) Brushes.Red;
-                            icon = HUDT.nogps_wide;
+                            col = (SolidBrush)Brushes.Red; 
+                            if (displayicons)
+                                icon = HUDT.nofix_wide;
                         }
                         else if (_fix == 2)
                         {
-                            gps = (HUDT.GPS2);
-                            icon = HUDT._2dfix_wide;
+                            gps = (HUDT.GPS2); 
+                            if (displayicons)
+                                icon = HUDT._2dfix_wide;
                         }
                         else if (_fix == 3)
                         {
                             gps = (HUDT.GPS3);
-                            icon = HUDT._3dfix_wide;
+                            if (displayicons)
+                                icon = HUDT._3dfix_wide;
                         }
                         else if (_fix == 4)
                         {
-                            gps = (HUDT.GPS4);
-                            icon = HUDT._3ddgps_wide;
+                            gps = (HUDT.GPS4); 
+                            if (displayicons)
+                                icon = HUDT._3ddgps_wide;
                         }
                         else if (_fix == 5)
                         {
-                            gps = (HUDT.GPS5);
-                            icon = HUDT.rtkfloat_wide;
+                            gps = (HUDT.GPS5); 
+                            if (displayicons)
+                                icon = HUDT.rtkfloat_wide;
                         }
                         else if (_fix == 6)
                         {
-                            gps = (HUDT.GPS6);
-                            icon = HUDT.rtkfixed_wide;
+                            gps = (HUDT.GPS6); 
+                            if (displayicons)
+                                icon = HUDT.rtkfixed_wide;
                         }
                         else
                         {
                             gps = _fix.ToString();
-                            icon = HUDT.unknown;
+                            if (displayicons)
+                                icon = HUDT.unknown;
                         }
 
                         // gps2
                         if (a == 1) gps = gps.Replace("GPS:", "GPS2:");
                         // if nogps dont display
-                        if(a >= 1 && _fix == 0)
+                        if (a >= 1 && _fix == 0)
                             continue;
+
+
+                        int textIdx = (a == 0 && _gpsfix2 > 0) ? 0 : 1;
 
 
                         //If displayicons is true then we display image icons instead of text on GPS staus
@@ -2781,7 +2969,7 @@ namespace MissionPlanner.Controls
                             if (a == 0 && _gpsfix2 == 0) hor_pos = this.Width - (((fontsize + 8) * 3)) - 3;
                             else hor_pos = this.Width - (((fontsize + 8) * 3) * 2) - 5;
 
-                            if (a == 1) hor_pos =  this.Width - (((fontsize + 8) * 3)) - 3;
+                            if (a == 1) hor_pos = this.Width - (((fontsize + 8) * 3)) - 3;
 
                             //DrawImage(icon, hor_pos, this.Height - ((fontsize + 2) * 3) - fontoffset + 2, (fontsize + 8) * 3, fontsize + 8);
                             DrawImage(icon, hor_pos, this.Height - (fontsize + 13), (fontsize + 8) * 3, fontsize + 8);
@@ -2790,9 +2978,9 @@ namespace MissionPlanner.Controls
                         else
                         {
 
-                            drawstring(gps, font, fontsize + 2, col, this.Width - 13 * fontsize,
-                                this.Height - ((fontsize + 2) * 3) - fontoffset + ((fontsize + 2) * a));
+                            drawstring(gps, font, fontsize, col, this.Width - 13 * fontsize, yPos[textIdx]);
                         }
+
                         a++;
                     }
                 }
@@ -2868,7 +3056,7 @@ namespace MissionPlanner.Controls
                     //if ((armedtimer.AddSeconds(8) > DateTime.Now))
                     {
 
-                        var size = calcsize(HUDT.DISARMED, font, fontsize + 10, (SolidBrush)Brushes.Red, Width - 50 - 50);
+                        var size = calcsize(HUDT.DISARMED, fontsize + 10, (SolidBrush)Brushes.Red);
 
                         drawstring(HUDT.DISARMED, font, fontsize + 10, (SolidBrush) Brushes.Red, size.Width/ -2/* - 85*/,
                             halfheight / -3);
@@ -2879,11 +3067,18 @@ namespace MissionPlanner.Controls
                 {
                     if ((armedtimer.AddSeconds(8) > DateTime.Now))
                     {
-                        var size = calcsize(HUDT.ARMED, font, fontsize + 10, (SolidBrush)Brushes.Red, Width - 50 - 50);
+                        var size = calcsize(HUDT.ARMED, fontsize + 20, (SolidBrush)Brushes.Red);
                         drawstring(HUDT.ARMED, font, fontsize + 20, (SolidBrush) Brushes.Red, size.Width / -2/* - 70*/,
                             halfheight / -3);
                         statuslast = status;
                     }
+                }
+                
+                if (safetyactive)
+                {
+                    var size = calcsize(HUDT.SAFE, fontsize + 10, (SolidBrush)Brushes.Red);
+                    drawstring(HUDT.SAFE, font, fontsize + 10, (SolidBrush)Brushes.Red, size.Width / -2, halfheight / -6);
+                    statuslast = status;
                 }
 
                 if (failsafe == true)
@@ -2905,7 +3100,7 @@ namespace MissionPlanner.Controls
 
                     var newfontsize = calcfontsize(message, font, fontsize + 10, (SolidBrush) brush, Width - 50 - 50);
 
-                    var size = calcsize(message, font, newfontsize, (SolidBrush)Brushes.Red, Width - 50 - 50);
+                    var size = calcsize(message, newfontsize, (SolidBrush)Brushes.Red);
 
                     drawstring(message, font, newfontsize, (SolidBrush) brush, size.Width / -2,
                         halfheight / 3);
@@ -2923,7 +3118,7 @@ namespace MissionPlanner.Controls
                     }
                     else
                     {
-                        vibehitzone = new Rectangle(this.Width - 18 * fontsize, this.Height - ((fontsize + 2) * 3) - fontoffset, 40, fontsize * 2);
+                        vibehitzone = new Rectangle(this.Width - 18 * fontsize, yPos[1], 40, fontsize * 2);
                     }
 
                     if (vibex > 30 || vibey > 30 || vibez > 30)
@@ -2966,6 +3161,9 @@ namespace MissionPlanner.Controls
                     }
                 }
 
+                if (load == 100)
+                    drawstring("CPU", font, fontsize + 2, _redBrush, vibehitzone.Right, vibehitzone.Y);
+
                 if (displayekf)
                 {
                     if (displayicons)
@@ -2975,7 +3173,7 @@ namespace MissionPlanner.Controls
                     }
                     else
                     {
-                        ekfhitzone = new Rectangle(this.Width - 23 * fontsize, this.Height - ((fontsize + 2) * 3) - fontoffset, 40, fontsize * 2);
+                        ekfhitzone = new Rectangle(this.Width - 23 * fontsize,yPos[1], 40, fontsize * 2);
                     }
 
                     if (ekfstatus > 0.5)
@@ -3012,6 +3210,46 @@ namespace MissionPlanner.Controls
                         else
                         {
                             drawstring("EKF", font, fontsize + 2, _whiteBrush, ekfhitzone.X, ekfhitzone.Y);
+                        }
+                    }
+                }
+
+                if (displayprearm && status == false) // not armed
+                {
+                    if (displayicons)
+                    {
+                        var width = (fontsize + 8) * 3;
+                        prearmhitzone = new Rectangle(this.Width - width * 5 + width / 2 - 7, this.Height - (fontsize*2 + 25), width * 2, fontsize + 8);
+                    }
+                    else
+                    {
+                        int x = this.Width - 24 * fontsize;
+                        if (!prearmstatus) x -= 2 * fontsize;
+                        // Estimate the width of the string for the hit zone
+                        int width = TextRenderer.MeasureText(prearmstatus ? HUDT.ReadyToArm : HUDT.NotReadyToArm, new Font(HUDT.Font, fontsize + 2)).Width;
+                        prearmhitzone = new Rectangle(x, yPos[0] - 4, width, fontsize * 2);
+                    }
+
+                    if (prearmstatus)
+                    {
+                        if (displayicons)
+                        {
+                            DrawImage(HUDT.prearm_green, prearmhitzone.X, prearmhitzone.Y + 2, prearmhitzone.Width, prearmhitzone.Height);
+                        }
+                        else
+                        {
+                            drawstring(HUDT.ReadyToArm, font, fontsize + 2, _whiteBrush, prearmhitzone.X, prearmhitzone.Y);
+                        }
+                    }
+                    else
+                    {
+                        if (displayicons)
+                        {
+                            DrawImage(HUDT.prearm_red, prearmhitzone.X, prearmhitzone.Y + 2, prearmhitzone.Width, prearmhitzone.Height);
+                        }
+                        else
+                        {
+                            drawstring(HUDT.NotReadyToArm, font, fontsize + 2, (SolidBrush)Brushes.Red, prearmhitzone.X, prearmhitzone.Y);
                         }
                     }
                 }
@@ -3099,6 +3337,8 @@ namespace MissionPlanner.Controls
         /// </summary>
         private readonly GraphicsPath pth = new GraphicsPath();
 
+        private float _load;
+
         float calcfontsize(string text, Font font, float fontsize, SolidBrush brush, int targetwidth)
         {
             if (text == null)
@@ -3125,7 +3365,7 @@ namespace MissionPlanner.Controls
             return fontsize;
         }
 
-        Size calcsize(string text, Font font, float fontsize, SolidBrush brush, int targetwidth)
+        Size calcsize(string text, float fontsize, SolidBrush brush)
         {
             if (text == null)
                 return new Size(0, 0);
@@ -3159,6 +3399,8 @@ namespace MissionPlanner.Controls
             return n;
         }
 
+        readonly float[] texCoords = { 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f };
+
         void drawstring(string text, Font font, float fontsize, SolidBrush brush, float x, float y)
         {
             if (!opengl)
@@ -3177,13 +3419,23 @@ namespace MissionPlanner.Controls
             GL.PopMatrix(); printer.End();
             */
 
+           
+            GL.Enable(EnableCap.Texture2D);
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            GL.Color4(1f, 1, 1, 1);
+
+            GL.TexCoordPointer(2, TexCoordPointerType.Float, 0, texCoords);
+            GL.EnableClientState(ArrayCap.TextureCoordArray);
+
+            GL.EnableClientState(ArrayCap.VertexArray);
+
             float maxy = 1;
 
             foreach (char cha in text)
             {
-                int charno = (int) cha;
+                int charno = (int)cha;
 
-                int charid = charno ^ (int) (fontsize * 1000) ^ brush.Color.ToArgb();
+                int charid = charno ^ (int)(fontsize * 1000) ^ brush.Color.ToArgb();
 
                 if (!charDict.ContainsKey(charid))
                 {
@@ -3194,7 +3446,7 @@ namespace MissionPlanner.Controls
                     var pth = new GraphicsPath();
 
                     if (text != null)
-                        pth.AddString(cha + "", font.FontFamily, 0, fontsize + 5, new Point((int) 0, (int) 0),
+                        pth.AddString(cha + "", font.FontFamily, 0, fontsize + 5, new Point((int)0, (int)0),
                             StringFormat.GenericTypographic);
 
                     if (pth.PointCount > 0)
@@ -3209,13 +3461,13 @@ namespace MissionPlanner.Controls
                         }
                     }
 
-                    var larger = maxx > maxy ? (int) maxx + 1 : (int) maxy + 1;
+                    var larger = maxx > maxy ? (int)maxx + 1 : (int)maxy + 1;
 
                     charDict[charid] = new character()
                     {
                         bitmap = new Bitmap(NextPowerOf2(larger), NextPowerOf2(larger),
                             System.Drawing.Imaging.PixelFormat.Format32bppArgb),
-                        size = (int) fontsize,
+                        size = (int)fontsize,
                         pth = pth
                     };
 
@@ -3233,7 +3485,7 @@ namespace MissionPlanner.Controls
                         gfx.FillPath(brush, pth);
                     }
 
-                    charDict[charid].width = (int) (maxx + 2);
+                    charDict[charid].width = (int)(maxx + 2);
 
                     //charbitmaps[charid] = charbitmaps[charid].Clone(new RectangleF(0, 0, maxx + 2, maxy + 2), charbitmaps[charid].PixelFormat);
 
@@ -3242,7 +3494,7 @@ namespace MissionPlanner.Controls
                     // create texture
                     int textureId;
                     GL.TexEnv(TextureEnvTarget.TextureEnv, TextureEnvParameter.TextureEnvMode,
-                        (float) TextureEnvModeCombine.Replace); //Important, or wrong color on some computers
+                        (float)TextureEnvModeCombine.Replace); //Important, or wrong color on some computers
 
                     Bitmap bitmap = charDict[charid].bitmap;
                     GL.GenTextures(1, out textureId);
@@ -3255,9 +3507,9 @@ namespace MissionPlanner.Controls
                         OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, data.Scan0);
 
                     GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter,
-                        (int) TextureMinFilter.Linear);
+                        (int)TextureMinFilter.Linear);
                     GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter,
-                        (int) TextureMagFilter.Linear);
+                        (int)TextureMagFilter.Linear);
 
                     //    GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)All.Nearest);
                     //GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)All.Nearest);
@@ -3275,39 +3527,23 @@ namespace MissionPlanner.Controls
                 // dont draw spaces
                 if (cha != ' ')
                 {
-                    /*
-                    TranslateTransform(x, y);
-                    DrawPath(this._p, charDict[charid].pth);
+                    float[] vertices = {
+                        x, y+ charDict[charid].bitmap.Height * scale ,
+                        x + charDict[charid].bitmap.Width * scale, y+ charDict[charid].bitmap.Height * scale,
+                        x + charDict[charid].bitmap.Width * scale, y,
+                        x, y  }; 
 
-                    //Draw the face
-
-                    FillPath(brush, charDict[charid].pth);
-
-                    TranslateTransform(-x, -y);
-                    */
-                    //GL.Enable(EnableCap.Blend);
-                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-
-                    GL.Enable(EnableCap.Texture2D);
                     GL.BindTexture(TextureTarget.Texture2D, charDict[charid].gltextureid);
-
-                    GL.Begin(PrimitiveType.TriangleFan);
-                    GL.TexCoord2(0, 0);
-                    GL.Vertex2(x, y);
-                    GL.TexCoord2(1, 0);
-                    GL.Vertex2(x + charDict[charid].bitmap.Width * scale, y);
-                    GL.TexCoord2(1, 1);
-                    GL.Vertex2(x + charDict[charid].bitmap.Width * scale, y + charDict[charid].bitmap.Height * scale);
-                    GL.TexCoord2(0, 1);
-                    GL.Vertex2(x + 0, y + charDict[charid].bitmap.Height * scale);
-                    GL.End();
-
-                    //GL.Disable(EnableCap.Blend);
-                    GL.Disable(EnableCap.Texture2D);
+                    GL.VertexPointer(2, VertexPointerType.Float, 0, vertices);
+                    GL.DrawArrays(PrimitiveType.Quads, 0, 4);
                 }
 
                 x += charDict[charid].width * scale;
             }
+            GL.DisableClientState(ArrayCap.TextureCoordArray);
+            GL.DisableClientState(ArrayCap.VertexArray);
+            GL.Disable(EnableCap.Texture2D);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
         void drawstringGDI(string text, Font font, float fontsize, SolidBrush brush, float x, float y)
@@ -3569,4 +3805,4 @@ namespace MissionPlanner.Controls
             }
         }
     }
-}
+ }

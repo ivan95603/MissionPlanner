@@ -20,6 +20,7 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
+using com.drew.metadata.jpeg;
 using GeoAPI.CoordinateSystems;
 using GeoAPI.CoordinateSystems.Transformations;
 using MissionPlanner.Controls;
@@ -179,6 +180,9 @@ namespace MissionPlanner.Grid
 
             var griddata = savegriddata();
 
+            // Save config too
+            savesettings();
+
             using (SaveFileDialog sfd = new SaveFileDialog())
             {
                 sfd.Filter = "*.grid|*.grid";
@@ -245,6 +249,7 @@ namespace MissionPlanner.Grid
 
             // Spiral Settings
             NUM_clockwise_laps.Value = griddata.clockwiseLaps;
+            NUM_laps.Value = griddata.laps;
             CHK_match_spiral_perimeter.Checked = griddata.matchPerimeter;
 
             // update display options last
@@ -298,6 +303,7 @@ namespace MissionPlanner.Grid
 
             //Spiral Settings
             griddata.clockwiseLaps = NUM_clockwise_laps.Value;
+            griddata.laps = NUM_laps.Value;
             griddata.matchPerimeter = CHK_match_spiral_perimeter.Checked;
 
             griddata.trigdist = rad_trigdist.Checked;
@@ -331,7 +337,8 @@ namespace MissionPlanner.Grid
                 loadsetting("grid_dist", NUM_Distance);
                 loadsetting("grid_overshoot1", NUM_overshoot);
                 loadsetting("grid_overshoot2", NUM_overshoot2);
-                loadsetting("grid_leadin", NUM_leadin);
+                loadsetting("grid_leadin1", NUM_leadin);
+                loadsetting("grid_leadin2", NUM_leadin2);
                 loadsetting("grid_startfrom", CMB_startfrom);
                 loadsetting("grid_overlap", num_overlap);
                 loadsetting("grid_sidelap", num_sidelap);
@@ -362,6 +369,7 @@ namespace MissionPlanner.Grid
 
                 // Spiral Settings
                 loadsetting("grid_clockwise_laps", NUM_clockwise_laps);
+                loadsetting("grid_laps", NUM_laps);
                 loadsetting("grid_match_spiral_perimeter", CHK_match_spiral_perimeter);
 
                 loadsetting("grid_internals", CHK_internals);
@@ -406,11 +414,13 @@ namespace MissionPlanner.Grid
             plugin.Host.config["grid_camdir"] = CHK_camdirection.Checked.ToString();
 
             plugin.Host.config["grid_usespeed"] = CHK_usespeed.Checked.ToString();
+            plugin.Host.config["grid_speed"] = NUM_UpDownFlySpeed.Value.ToString();
 
             plugin.Host.config["grid_dist"] = NUM_Distance.Value.ToString();
             plugin.Host.config["grid_overshoot1"] = NUM_overshoot.Value.ToString();
             plugin.Host.config["grid_overshoot2"] = NUM_overshoot2.Value.ToString();
-            plugin.Host.config["grid_leadin"] = NUM_leadin.Value.ToString();
+            plugin.Host.config["grid_leadin1"] = NUM_leadin.Value.ToString();
+            plugin.Host.config["grid_leadin2"] = NUM_leadin2.Value.ToString();
             plugin.Host.config["grid_overlap"] = num_overlap.Value.ToString();
             plugin.Host.config["grid_sidelap"] = num_sidelap.Value.ToString();
             plugin.Host.config["grid_spacing"] = NUM_spacing.Value.ToString();
@@ -441,6 +451,7 @@ namespace MissionPlanner.Grid
 
             // Spiral Settings
             plugin.Host.config["grid_clockwise_laps"] = NUM_clockwise_laps.Value.ToString();
+            plugin.Host.config["grid_laps"] = NUM_laps.Value.ToString();
             plugin.Host.config["grid_match_spiral_perimeter"] = CHK_match_spiral_perimeter.Checked.ToString();
         }
 
@@ -591,7 +602,7 @@ namespace MissionPlanner.Grid
                     (double)NUM_overshoot.Value, (double)NUM_overshoot2.Value,
                     (Utilities.Grid.StartPosition)Enum.Parse(typeof(Utilities.Grid.StartPosition), CMB_startfrom.Text), false,
                     (float)NUM_Lane_Dist.Value, (float)NUM_leadin.Value, MainV2.comPort.MAV.cs.PlannedHomeLocation,
-                    (int)NUM_clockwise_laps.Value, CHK_match_spiral_perimeter.Checked).ConfigureAwait(true);
+                    (int)NUM_clockwise_laps.Value, CHK_match_spiral_perimeter.Checked, (int)NUM_laps.Value).ConfigureAwait(true);
             }
             else
             {
@@ -1498,14 +1509,24 @@ namespace MissionPlanner.Grid
                             Console.WriteLine(lcDirectory.GetName() + " - " + tag.GetTagName() + " " + tag.GetTagValue().ToString());
                         }
 
-                        if (lcDirectory.ContainsTag(ExifDirectory.TAG_EXIF_IMAGE_HEIGHT))
+                        if (lcDirectory is ExifDirectory && lcDirectory.ContainsTag(ExifDirectory.TAG_EXIF_IMAGE_HEIGHT))
                         {
                             TXT_imgheight.Text = lcDirectory.GetInt(ExifDirectory.TAG_EXIF_IMAGE_HEIGHT).ToString();
                         }
 
-                        if (lcDirectory.ContainsTag(ExifDirectory.TAG_EXIF_IMAGE_WIDTH))
+                        if (lcDirectory is ExifDirectory && lcDirectory.ContainsTag(ExifDirectory.TAG_EXIF_IMAGE_WIDTH))
                         {
                             TXT_imgwidth.Text = lcDirectory.GetInt(ExifDirectory.TAG_EXIF_IMAGE_WIDTH).ToString();
+                        }
+
+                        if (lcDirectory is JpegDirectory && lcDirectory.ContainsTag(JpegDirectory.TAG_JPEG_IMAGE_HEIGHT))
+                        {
+                            TXT_imgheight.Text = lcDirectory.GetInt(JpegDirectory.TAG_JPEG_IMAGE_HEIGHT).ToString();
+                        }
+
+                        if (lcDirectory is JpegDirectory && lcDirectory.ContainsTag(JpegDirectory.TAG_JPEG_IMAGE_WIDTH))
+                        {
+                            TXT_imgwidth.Text = lcDirectory.GetInt(JpegDirectory.TAG_JPEG_IMAGE_WIDTH).ToString();
                         }
 
                         if (lcDirectory.ContainsTag(ExifDirectory.TAG_FOCAL_PLANE_X_RES))

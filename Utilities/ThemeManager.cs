@@ -178,6 +178,7 @@ namespace MissionPlanner.Utilities
         public static Color BannerColor1;
         public static Color BannerColor2;
         public static Color ButtonTextColor;
+        public static Color ButtonTextColorNotEnabled;
         public static Color CurrentPPMBackground;
         public static Color ZedGraphChartFill;
         public static Color ZedGraphPaneFill;
@@ -1146,12 +1147,12 @@ mc:Ignorable=""d""
                     ctl.ForeColor = Color.Black;
                     ctl.BackColor = ButBG;
                 }
-                else if (ctl.GetType() == typeof(MyButton))
+                else if (ctl is MyButton but)
                 {
-                    Controls.MyButton but = (MyButton)ctl;
                     but.BGGradTop = ButBG;
                     but.BGGradBot = ButBGBot;
                     but.TextColor = ButtonTextColor;
+                    but.TextColorNotEnabled = ButtonTextColorNotEnabled;
                     but.Outline = ButBorder;
                     but.ColorMouseDown = ColorMouseDown;        //sets the colour of buttons for different situations
                     but.ColorMouseOver = ColorMouseOver;
@@ -1325,7 +1326,7 @@ mc:Ignorable=""d""
                 }
                 else if (ctl.GetType() == typeof(LinkLabel))
                 {
-                    ctl.BackColor = BGColor;
+                    ctl.BackColor = System.Drawing.Color.Transparent;
                     ctl.ForeColor = TextColor;
                     LinkLabel LNK = (LinkLabel)ctl;
                     LNK.ActiveLinkColor = TextColor;

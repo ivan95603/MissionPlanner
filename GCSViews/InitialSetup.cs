@@ -6,6 +6,7 @@ using MissionPlanner.GCSViews.ConfigurationView;
 using MissionPlanner.Radio;
 using MissionPlanner.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Resources;
 using System.Windows.Forms;
@@ -16,6 +17,44 @@ namespace MissionPlanner.GCSViews
     {
         internal static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         private static string lastpagename = "";
+
+        [Flags]
+        public enum pageOptions
+        {
+            none = 0,
+            isConnected = 1,
+            isDisConnected = 2,
+            isTracker = 4,
+            isCopter = 8,
+            isCopter35plus = 16,
+            isHeli = 32,
+            isQuadPlane = 64,
+            isPlane = 128,
+            isRover = 256,
+            gotAllParams = 512
+        }
+
+        public class pluginPage
+        {
+            public Type page;
+            public string headerText;
+            public pageOptions options;
+
+            public pluginPage(Type page, string headerText, pageOptions options)
+            {
+                this.page = page;
+                this.headerText = headerText;
+                this.options = options;
+            }
+        }
+
+
+        private static List<pluginPage> pluginViewPages = new List<pluginPage>();
+        public static void AddPluginViewPage(Type page, string headerText, pageOptions options = pageOptions.none)
+        {
+            pluginViewPages.Add(new pluginPage(page, headerText, options));
+        }
+
 
         public InitialSetup()
         {
@@ -92,7 +131,7 @@ namespace MissionPlanner.GCSViews
             }
         }
 
-        private BackstageViewPage AddBackstageViewPage(Type userControl, string headerText, bool enabled = true,
+        public BackstageViewPage AddBackstageViewPage(Type userControl, string headerText, bool enabled = true,
     BackstageViewPage Parent = null, bool advanced = false)
         {
             try
@@ -136,6 +175,9 @@ namespace MissionPlanner.GCSViews
                 }
             }
 
+            AddBackstageViewPage(typeof(ConfigSecureAP), "Secure",
+                isDisConnected);
+
 
             var mand = AddBackstageViewPage(typeof(ConfigMandatory), rm.GetString("backstageViewPagemand.Text"), isConnected && gotAllParams);
 
@@ -149,7 +191,7 @@ namespace MissionPlanner.GCSViews
                     mand);
             }
 
-            if (isCopter && MainV2.DisplayConfiguration.displayInitialParams)
+            if ((isCopter || isQuadPlane) && MainV2.DisplayConfiguration.displayInitialParams)
             {
                 AddBackstageViewPage(typeof(ConfigInitialParams), rm.GetString("backstageViewPageInitialParams.Text"), isConnected && gotAllParams, mand);
             }
@@ -170,7 +212,6 @@ namespace MissionPlanner.GCSViews
                     AddBackstageViewPage(typeof(ConfigHWCompass), rm.GetString("backstageViewPagecompass.Text"),
                         isConnected && gotAllParams, mand);
             }
-
             if (MainV2.DisplayConfiguration.displayRadioCalibration)
             {
                 AddBackstageViewPage(typeof(ConfigRadioInput), rm.GetString("backstageViewPageradio.Text"), isConnected && gotAllParams, mand);
@@ -179,6 +220,10 @@ namespace MissionPlanner.GCSViews
             {
                 AddBackstageViewPage(typeof(ConfigRadioOutput), "Servo Output", isConnected && gotAllParams, mand);
 
+            }
+            if (MainV2.DisplayConfiguration.displaySerialPorts)
+            {
+                AddBackstageViewPage(typeof(ConfigSerial), rm.GetString("backstageViewPageSerial.Text"), isConnected && gotAllParams, mand);
             }
             if (MainV2.DisplayConfiguration.displayEscCalibration)
             {
@@ -199,8 +244,16 @@ namespace MissionPlanner.GCSViews
             var opt = AddBackstageViewPage(typeof(ConfigOptional), rm.GetString("backstageViewPageopt.Text"));
             if (MainV2.DisplayConfiguration.displayRTKInject)
             {
-                AddBackstageViewPage(typeof(ConfigSerialInjectGPS), "RTK/GPS Inject", true, opt);
+                var rtcmStr = rm.GetString("backstageViewPageSerialInjectGPS.Text");
+                if(rtcmStr == null)
+                    {
+                    rtcmStr = "RTK/GPS Inject";
+                }
+                AddBackstageViewPage(typeof(ConfigSerialInjectGPS), rtcmStr, true, opt);
             }
+
+            AddBackstageViewPage(typeof(ConfigCubeID), "CubeID Update",
+    isConnected, opt);
 
             if (MainV2.DisplayConfiguration.displaySikRadio)
             {
@@ -289,9 +342,44 @@ namespace MissionPlanner.GCSViews
             {
                 var adv = AddBackstageViewPage(typeof(ConfigAdvanced), "Advanced");
 
-                AddBackstageViewPage(typeof(ConfigTerminal), "Terminal", true, adv);
+                if (MainV2.DisplayConfiguration.displayTerminal)
+                {
+                    AddBackstageViewPage(typeof(ConfigTerminal), "Terminal", true, adv);
+                }
 
-                AddBackstageViewPage(typeof(ConfigREPL), "Script REPL", isConnected, adv);
+                if (MainV2.DisplayConfiguration.displayREPL)
+                {
+                    AddBackstageViewPage(typeof(ConfigREPL), "Script REPL", isConnected, adv);
+                }
+            }
+
+
+            foreach (var item in pluginViewPages)
+            {
+
+                // go through all options
+                if (item.options.HasFlag(pageOptions.isConnected) && !isConnected)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isDisConnected) && !isDisConnected)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isTracker) && !isTracker)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isCopter) && !isCopter)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isCopter35plus) && !isCopter35plus)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isHeli) && !isHeli)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isQuadPlane) && !isQuadPlane)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isPlane) && !isPlane)
+                    continue;
+                if (item.options.HasFlag(pageOptions.isRover) && !isRover)
+                    continue;
+                if (item.options.HasFlag(pageOptions.gotAllParams) && !gotAllParams)
+                    continue;
+
+                AddBackstageViewPage(item.page, item.headerText);
             }
 
             // remeber last page accessed

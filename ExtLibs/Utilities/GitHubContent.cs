@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using log4net;
@@ -46,25 +47,6 @@ namespace MissionPlanner.Utilities
             public enum TypeEnum { Dir, File };
         }
 
-        static T GetObject<T>(Dictionary<string, object> dict)
-        {
-            Type type = typeof (T);
-            var obj = Activator.CreateInstance(type);
-
-            foreach (var kv in dict)
-            {
-                try
-                {
-                    if (type.GetField(kv.Key) != null)
-                        type.GetField(kv.Key).SetValue(obj, kv.Value);
-                    if (type.GetProperty(kv.Key) != null)
-                        type.GetProperty(kv.Key).SetValue(obj, kv.Value, null);
-                }
-                catch { }
-            }
-            return (T) obj;
-        }
-
         public static List<FileInfo> GetDirContent(string owner, string repo, string path, string filter = "")
         {
             if (path != "")
@@ -78,28 +60,18 @@ namespace MissionPlanner.Utilities
 
             string url = String.Format("{0}/{1}/{2}{3}", githubapiurl, owner, repo, path);
 
-            WebRequest wr = WebRequest.Create(url);
-            ((HttpWebRequest) wr).AllowAutoRedirect = true;
-            ((HttpWebRequest) wr).UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
-            var response = wr.GetResponse();
-            var respstream = response.GetResponseStream();
-
-            string content = new StreamReader(respstream).ReadToEnd();
-
-            respstream.Close();
-
-            //WebClient wc = new WebClient();
-            //string content = wc.DownloadString(url);
-
-            var output = JsonConvert.DeserializeObject<object[]>(content);
-
-            foreach (JObject itemjobject in output)
+            var handler = new HttpClientHandler()
             {
-                var item = itemjobject.ToObject<Dictionary<string, object>>();
-                FileInfo fi = (FileInfo) GetObject<FileInfo>(item);
-                //   string t1 = item["type"].ToString();
-                //   string t2 =item["path"].ToString();
+                AllowAutoRedirect = true
+            };
+            var client = new HttpClient(handler);
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            string content = client.GetStringAsync(url).GetAwaiter().GetResult();
 
+            var output = JsonConvert.DeserializeObject<FileInfo[]>(content);
+
+            foreach (var fi in output)
+            {
                 if (fi.name.ToLower().Contains(filter.ToLower()))
                 {
                     answer.Add(fi);
@@ -119,26 +91,22 @@ namespace MissionPlanner.Utilities
 
             string url = String.Format("{0}/{1}/{2}{3}", githubapiurl, owner, repo, path);
 
-            WebRequest wr = WebRequest.Create(url);
-            ((HttpWebRequest) wr).AllowAutoRedirect = true;
-            ((HttpWebRequest) wr).UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
-            using (var response = wr.GetResponse())
+            var handler = new HttpClientHandler()
             {
-                var respstream = response.GetResponseStream();
+                AllowAutoRedirect = true
+            };
+            var client = new HttpClient(handler);
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko");
+            string content = client.GetStringAsync(url).GetAwaiter().GetResult();
 
-                string content = new StreamReader(respstream).ReadToEnd();
+            Dictionary<string, object> output = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
 
-                respstream.Close();
+            if (output == null)
+                return null;
 
-                Dictionary<string, object> output = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
+            byte[] filecontent = Convert.FromBase64String(output["content"].ToString());
 
-                if (output == null)
-                    return null;
-
-                byte[] filecontent = Convert.FromBase64String(output["content"].ToString());
-
-                return filecontent;
-            }
+            return filecontent;
         }
     }
 }

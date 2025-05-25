@@ -95,7 +95,7 @@ namespace MissionPlanner.ArduPilot
             SUBMARINE
         }
 
-        private static object getListlock = new object();
+        private static readonly object getListlock = new object();
 
         public static void GetList(string url = "https://firmware.ardupilot.org/manifest.json.gz", bool force = false)
         {
@@ -104,30 +104,83 @@ namespace MissionPlanner.ArduPilot
                 if (force == false && Manifest != null)
                     return;
 
-                log.Info(url);
+                try
+                {
+                    log.Info(url);
 
-                var client = new HttpClient();
+                    var client = new HttpClient();
 
-                if (!String.IsNullOrEmpty(Settings.Instance.UserAgent))
-                    client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.UserAgent);
+                    if (!String.IsNullOrEmpty(Settings.Instance.UserAgent))
+                        client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.UserAgent);
 
-                var manifestgz = client.GetByteArrayAsync(url).GetAwaiter().GetResult();
-                var mssrc = new MemoryStream(manifestgz);
-                var msdest = new MemoryStream();
-                GZipStream gz = new GZipStream(mssrc, CompressionMode.Decompress);
-                gz.CopyTo(msdest);
-                msdest.Position = 0;
-                var manifest = new StreamReader(msdest).ReadToEnd();
+                    var manifestgz = client.GetByteArrayAsync(url).GetAwaiter().GetResult();
+                    var mssrc = new MemoryStream(manifestgz);
+                    var msdest = new MemoryStream();
+                    GZipStream gz = new GZipStream(mssrc, CompressionMode.Decompress);
+                    gz.CopyTo(msdest);
+                    msdest.Position = 0;
+                    var manifest = new StreamReader(msdest).ReadToEnd();
 
-                Manifest = JsonConvert.DeserializeObject<ManifestRoot>(manifest);
+                    Manifest = JsonConvert.DeserializeObject<ManifestRoot>(manifest);
 
-                log.Info(Manifest.Firmware?.Length);
+                    log.Info(Manifest.Firmware?.Length);
+
+                    APFirmware.GetListAppend("https://raw.githubusercontent.com/CubePilot/periph-manifest/main/manifest.json");
+                }
+                catch (Exception ex)
+                {
+                    log.Error(ex);
+                }
+            }
+        }
+
+        public static void GetListAppend(string url, bool force = false)
+        {
+            lock (getListlock)
+            {
+                try
+                {
+                    log.Info(url);
+
+                    var client = new HttpClient();
+
+                    if (!String.IsNullOrEmpty(Settings.Instance.UserAgent))
+                        client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.UserAgent);
+
+                    var manifestgz = client.GetByteArrayAsync(url).GetAwaiter().GetResult();
+                    var mssrc = new MemoryStream(manifestgz);
+                    var msdest = new MemoryStream();
+                    if (url.EndsWith(".gz"))
+                    {
+                        GZipStream gz = new GZipStream(mssrc, CompressionMode.Decompress);
+                        gz.CopyTo(msdest);
+                        msdest.Position = 0;
+                    }
+                    else
+                    {
+                        mssrc.CopyTo(msdest);
+                        msdest.Position = 0;
+                    }
+                    var manifest = new StreamReader(msdest).ReadToEnd();
+
+                    var Manifest2 = JsonConvert.DeserializeObject<ManifestRoot>(manifest);
+
+                    var list = Manifest.Firmware.ToList();
+                    list.AddRange(Manifest2.Firmware);
+                    Manifest.Firmware = list.ToArray();
+
+                    log.Info(Manifest.Firmware?.Length);
+                }
+                catch (Exception ex)
+                {
+                    log.Error(ex);
+                }
             }
         }
 
         public static ManifestRoot Manifest { get; set; }
 
-        public static long? GetBoardID(DeviceInfo device, bool boardidcheck = true)
+        public static long[] GetBoardID(DeviceInfo device, bool boardidcheck = true)
         {
             GetList();
 
@@ -136,6 +189,11 @@ namespace MissionPlanner.ArduPilot
             // match the board description
             var ans = Manifest.Firmware.Where(a => (
                 a.Platform?.ToLower() == device.board?.ToLower() ||
+                a.Platform?.ToLower().Replace("primary", "secondary") == device.board?.ToLower() ||
+                a.Platform?.ToLower() == device.board?.Replace("-BL", "secondary").ToLower() ||
+                a.Platform?.ToLower() == device.board?.Replace("-BL", "primary").ToLower() ||
+                a.Platform?.ToLower() == device.board?.ToLower() + "primary" ||
+                a.Platform?.ToLower() == device.board?.ToLower() + "secondary" ||
                 a.BootloaderStr.Any(b => b?.ToLower() == device.board?.ToLower())));
 
             if (boardidcheck)
@@ -143,7 +201,7 @@ namespace MissionPlanner.ArduPilot
 
             if (ans.Any())
             {
-                return ans.First().BoardId;
+                return ans.Select(a => a.BoardId).Distinct().ToArray();
             }
 
             if (device.hardwareid == null)
@@ -161,7 +219,7 @@ namespace MissionPlanner.ArduPilot
 
                 if (vidandusbdesc.Any())
                 {
-                    return vidandusbdesc.First().BoardId;
+                    return vidandusbdesc.Select(a => a.BoardId).Distinct().ToArray();
                 }
             }
 
@@ -237,7 +295,7 @@ namespace MissionPlanner.ArduPilot
         }
 
 
-        public static void test()
+        public static void Test()
         {
             GetList();
 

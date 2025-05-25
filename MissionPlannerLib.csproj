@@ -16,13 +16,14 @@
   <PropertyGroup>
     <DefineConstants>DEBUG;TRACE;LIB</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyName>MissionPlanner</AssemblyName>
+    <AssemblyName>MissionPlannerLib</AssemblyName>
   </PropertyGroup>
 
  <ItemGroup>
     <Compile Remove="APMPlannerXplanes\**" />
     <Compile Remove="ExtLibs\7zip\**" />
     <Compile Remove="ExtLibs\alglibnet\**" />
+    <Compile Remove="ExtLibs\AltitudeAngelWings.Plugin\**" />
     <Compile Remove="ExtLibs\AltitudeAngelWings\**" />
     <Compile Remove="ExtLibs\Antenna\**" />
     <Compile Remove="ExtLibs\Arduino\**" />
@@ -78,6 +79,7 @@
     <Compile Remove="ExtLibs\Onvif\**" />
     <Compile Remove="ExtLibs\OSDConfigurator\**" />
     <Compile Remove="ExtLibs\ParameterMetaDataGenerator\**" />
+    <Compile Remove="ExtLibs\pinvokegen\**" />
     <Compile Remove="ExtLibs\ProjNet\**" />
     <Compile Remove="ExtLibs\px4uploader\**" />
     <Compile Remove="ExtLibs\SharpAdbClient\**" />
@@ -105,6 +107,7 @@
     <Compile Remove="ExtLibs\Xamarin\**" />
     <Compile Remove="ExtLibs\ZedGraph\**" />
     <Compile Remove="ExtLibs\Zeroconf\**" />
+    <Compile Remove="MissionPlannerTests\**" />
     <Compile Remove="Msi\**" />
     <Compile Remove="Plugins\**" />
     <Compile Remove="plugins\Dowding\**" />
@@ -117,6 +120,7 @@
     <EmbeddedResource Remove="APMPlannerXplanes\**" />
     <EmbeddedResource Remove="ExtLibs\7zip\**" />
     <EmbeddedResource Remove="ExtLibs\alglibnet\**" />
+    <EmbeddedResource Remove="ExtLibs\AltitudeAngelWings.Plugin\**" />
     <EmbeddedResource Remove="ExtLibs\AltitudeAngelWings\**" />
     <EmbeddedResource Remove="ExtLibs\Antenna\**" />
     <EmbeddedResource Remove="ExtLibs\Arduino\**" />
@@ -172,6 +176,7 @@
     <EmbeddedResource Remove="ExtLibs\Onvif\**" />
     <EmbeddedResource Remove="ExtLibs\OSDConfigurator\**" />
     <EmbeddedResource Remove="ExtLibs\ParameterMetaDataGenerator\**" />
+    <EmbeddedResource Remove="ExtLibs\pinvokegen\**" />
     <EmbeddedResource Remove="ExtLibs\ProjNet\**" />
     <EmbeddedResource Remove="ExtLibs\px4uploader\**" />
     <EmbeddedResource Remove="ExtLibs\SharpAdbClient\**" />
@@ -199,6 +204,7 @@
     <EmbeddedResource Remove="ExtLibs\Xamarin\**" />
     <EmbeddedResource Remove="ExtLibs\ZedGraph\**" />
     <EmbeddedResource Remove="ExtLibs\Zeroconf\**" />
+    <EmbeddedResource Remove="MissionPlannerTests\**" />
     <EmbeddedResource Remove="Msi\**" />
     <EmbeddedResource Remove="Plugins\**" />
     <EmbeddedResource Remove="plugins\Dowding\**" />
@@ -210,6 +216,7 @@
     <None Remove="APMPlannerXplanes\**" />
     <None Remove="ExtLibs\7zip\**" />
     <None Remove="ExtLibs\alglibnet\**" />
+    <None Remove="ExtLibs\AltitudeAngelWings.Plugin\**" />
     <None Remove="ExtLibs\AltitudeAngelWings\**" />
     <None Remove="ExtLibs\Antenna\**" />
     <None Remove="ExtLibs\Arduino\**" />
@@ -265,6 +272,7 @@
     <None Remove="ExtLibs\Onvif\**" />
     <None Remove="ExtLibs\OSDConfigurator\**" />
     <None Remove="ExtLibs\ParameterMetaDataGenerator\**" />
+    <None Remove="ExtLibs\pinvokegen\**" />
     <None Remove="ExtLibs\ProjNet\**" />
     <None Remove="ExtLibs\px4uploader\**" />
     <None Remove="ExtLibs\SharpAdbClient\**" />
@@ -292,6 +300,7 @@
     <None Remove="ExtLibs\Xamarin\**" />
     <None Remove="ExtLibs\ZedGraph\**" />
     <None Remove="ExtLibs\Zeroconf\**" />
+    <None Remove="MissionPlannerTests\**" />
     <None Remove="Msi\**" />
     <None Remove="Plugins\**" />
     <None Remove="plugins\Dowding\**" />
@@ -332,6 +341,7 @@
  <ItemGroup>
    <Compile Remove="Controls\OpenGLtest.cs" />
    <Compile Remove="Controls\OpenGLtest2.cs" />
+   <Compile Remove="Utilities\ImageMatch.cs" />
  </ItemGroup>
 
  <ItemGroup>
@@ -395,13 +405,67 @@
 
    <Compile Include="ExtLibs\Comms\System.IO.Ports\WinSerialStream.cs" />
 
+   <Compile Include="plugins\example-watchbutton.cs" />
+
+   <Compile Include="plugins\example.cs" />
+
+   <Compile Include="plugins\example10-canlogfile.cs" />
+
+   <Compile Include="plugins\example11-trace.cs" />
+
+   <Compile Include="plugins\example12-forwarding.cs" />
+
+   <Compile Include="plugins\example13-herelink2.cs" />
+
+   <Compile Include="plugins\example14-mass.cs" />
+
+   <Compile Include="plugins\example15-leds.cs" />
+
+   <Compile Include="plugins\example16-donate.cs" />
+
+   <Compile Include="plugins\example17-menuremove.cs" />
+
+   <Compile Include="plugins\example18-externalapi.cs" />
+
+   <Compile Include="plugins\example19-multiforward.cs" />
+
+   <Compile Include="plugins\example2-menu.cs" />
+
+   <Compile Include="plugins\example2.cs" />
+
+   <Compile Include="plugins\example20-multiplepositions.cs" />
+
+   <Compile Include="plugins\example21-persistentsimple.cs" />
+
+   <Compile Include="plugins\example22-fontsize.cs" />
+
    <Compile Include="plugins\example3-fencedist.cs" />
+
+   <Compile Include="plugins\example3.cs" />
 
    <Compile Include="plugins\example4-herelink.cs" />
 
+   <Compile Include="plugins\example4.cs" />
+
+   <Compile Include="plugins\example5-latencytracker.cs" />
+
+   <Compile Include="plugins\example5.cs" />
+
    <Compile Include="plugins\example6-mapicondesc.cs" />
 
+   <Compile Include="plugins\example6.cs" />
+
+   <Compile Include="plugins\example7-canrtcm.cs" />
+
+   <Compile Include="plugins\example7.cs" />
+
+   <Compile Include="plugins\example8-modechange.cs" />
+
+   <Compile Include="plugins\example8.cs" />
+
    <Compile Include="plugins\example9-hudonoff.cs" />
+
+   <Compile Include="plugins\generator.cs" />
 
    <Compile Include="plugins\InitialParamsCalculator.cs" />
 
@@ -410,38 +474,45 @@
    <Compile Include="SikRadio\ISikRadioForm.cs" />
    <Compile Include="SikRadio\RFD900.cs" />
    <Compile Include="SikRadio\RFDLib\Array.cs" />
+   <Compile Include="SikRadio\RFDLib\Collections.cs" />
+   <Compile Include="SikRadio\RFDLib\GUI\Settings.cs" />
+   <Compile Include="SikRadio\RFDLib\IO\ATCommand.cs" />
+   <Compile Include="SikRadio\RFDLib\IO\SerialPort\SerialPort.cs" />
+   <Compile Include="SikRadio\RFDLib\RFDLib.cs" />
    <Compile Include="SikRadio\RFDLib\Text.cs" />
  </ItemGroup>
 
  <ItemGroup>
+   <PackageReference Include="DynamicLanguageRuntime" Version="1.3.2" />
    <PackageReference Include="Microsoft.DotNet.Analyzers.Compatibility" Version="0.2.12-alpha">
      <PrivateAssets>all</PrivateAssets>
      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
    </PackageReference>
-   <PackageReference Include="SixLabors.ImageSharp" Version="1.0.3" />
-   <PackageReference Include="SkiaSharp.Views.Desktop.Common" Version="1.68.1.1" />
-   <PackageReference Include="SkiaSharp.Views.Forms" Version="1.68.1.1" />
+   <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
+   <PackageReference Include="SkiaSharp.Views.Desktop.Common" Version="2.80.2" />
+   <PackageReference Include="SkiaSharp.Views.Forms" Version="2.80.2" />
    <PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
    <PackageReference Include="System.Reactive.Linq" Version="4.4.1" />
    <PackageReference Include="System.Runtime" Version="4.3.1" />
-   <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="5.0.0" />
+   <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.0" />
    <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
    <PackageReference Include="TimeZoneConverter" Version="3.2.0" />
    <PackageReference Include="Xamarin.Essentials" Version="1.6.1" />
    <PackageReference Include="Xamarin.Forms" Version="5.0.0.2012" />
-    <PackageReference Include="SSH.NET" version="2016.1.0" targetFramework="net40" /> <PackageReference Include="SharpDX" version="4.1.0" />
+    <PackageReference Include="SSH.NET" version="2020.0.2" /> 
+	 <PackageReference Include="SharpDX" version="4.1.0" />
     <PackageReference Include="SharpDX.DirectInput" version="4.1.0" />
-    <PackageReference Include="SkiaSharp" Version="1.68.1.1" /> <PackageReference Include="Crc32.NET">
+    <PackageReference Include="SkiaSharp" Version="2.80.2" /> <PackageReference Include="Crc32.NET">
       <Version>1.2.0</Version>
     </PackageReference>
     <PackageReference Include="CSMatIO" version="1.0.20" targetFramework="netstandard2.0" requireReinstallation="true" />
     <PackageReference Include="DotNetZip">
-      <Version>1.15.0</Version>
+      <Version>1.16.0</Version>
     </PackageReference>
     <PackageReference Include="Flurl" version="3.0.2" targetFramework="net462" />
     <PackageReference Include="Flurl.Http" version="3.2.0" targetFramework="net462" />
     <PackageReference Include="GeoJSON.Net" version="1.1.64" />
-    <PackageReference Include="log4net" version="2.0.12" />   <PackageReference Include="Microsoft.CodeAnalysis.CSharp">
+    <PackageReference Include="log4net" version="2.0.13" />   <PackageReference Include="Microsoft.CodeAnalysis.CSharp">
       <Version>3.9.0</Version>
     </PackageReference>
     <PackageReference Include="Microsoft.Diagnostics.Runtime">
@@ -452,7 +523,7 @@
       <Version>1.1.64</Version>
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json">
-      <Version>12.0.3</Version>
+      <Version>13.0.3</Version>
     </PackageReference>
  </ItemGroup>
 
@@ -462,7 +533,6 @@
    <ProjectReference Include="ExtLibs\Antenna\MissionPlanner.Antenna.csproj" />
    <ProjectReference Include="ExtLibs\Arduino\Arduino.csproj" />
    <ProjectReference Include="ExtLibs\ArduPilot\MissionPlanner.ArduPilot.csproj" />
-   <ProjectReference Include="ExtLibs\BouncyCastle\BouncyCastle.csproj" />
    <ProjectReference Include="ExtLibs\BSE.Windows.Forms\BSE.Windows.Forms.csproj" />
    <ProjectReference Include="ExtLibs\Comms\MissionPlanner.Comms.csproj" />
    <ProjectReference Include="ExtLibs\Controls\MissionPlanner.Controls.csproj" />
@@ -483,7 +553,6 @@
    <ProjectReference Include="ExtLibs\MetaDataExtractorCSharp240d\MetaDataExtractor.csproj" />
    <ProjectReference Include="ExtLibs\MissionPlanner.Drawing\MissionPlanner.Drawing.csproj" />
    <ProjectReference Include="ExtLibs\mono\mcs\class\System.Windows.Forms\System.Windows.Forms-net_4_x.csproj" />
-   <ProjectReference Include="ExtLibs\NetDFULib\NetDFULib.csproj" />
    <ProjectReference Include="ExtLibs\netDxf\netDxf.csproj" />
    <ProjectReference Include="ExtLibs\OSDConfigurator\OSDConfigurator.csproj" />
    <ProjectReference Include="ExtLibs\ProjNet\ProjNET.csproj" />
@@ -493,7 +562,6 @@
    <ProjectReference Include="ExtLibs\Strings\MissionPlanner.Strings.csproj" />
    <ProjectReference Include="ExtLibs\System.Drawing.android\System.Drawing.android.csproj" />
    <ProjectReference Include="ExtLibs\Transitions\Transitions.csproj" />
-   <ProjectReference Include="ExtLibs\UAVCAN\UAVCAN.csproj" />
    <ProjectReference Include="ExtLibs\Utilities\MissionPlanner.Utilities.csproj" />
    <ProjectReference Include="ExtLibs\WebAPIs\MissionPlanner.WebAPIs.csproj" />
    <ProjectReference Include="ExtLibs\ZedGraph\ZedGraph.csproj" />
@@ -524,13 +592,76 @@
     </EmbeddedResource>
   </ItemGroup> 
   <ItemGroup>
+    <None Update="acsimplepids.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="aircraft.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="airports.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="aot.sh">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="ArduCopterConfig.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="block_plane_0.dae">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="BurntKermit.mpsystheme">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="camerasBuiltin.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="checklistDefault.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="dataflashlog.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="FirmwareHistory.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="HighContrast.mpsystheme">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="hud.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Lib.zip">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="mavcmd.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="mavextra.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="mavutil.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="mpdesktop.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="ParameterFactMetaData.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="ParameterMetaDataBackup.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="quaternion.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="rotmat.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="version.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="APMotorLayout.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

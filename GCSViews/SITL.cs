@@ -32,6 +32,7 @@ namespace MissionPlanner.GCSViews
         Regex default_params_regex = new Regex(@"""([^""]+)""\s*:\s*\{\s*[^\{}]+""default_params_filename""\s*:\s*\[*""([^""]+)""\s*[^\}]*\}");
 
         Uri sitlmasterurl = new Uri("https://firmware.ardupilot.org/Tools/MissionPlanner/sitl/");
+        Uri sitlbetaurl = new Uri("https://firmware.ardupilot.org/Tools/MissionPlanner/sitl/Beta/");
 
         Uri sitlcopterstableurl = new Uri("https://firmware.ardupilot.org/Tools/MissionPlanner/sitl/CopterStable/");
         Uri sitlplanestableurl = new Uri("https://firmware.ardupilot.org/Tools/MissionPlanner/sitl/PlaneStable/");
@@ -110,6 +111,18 @@ namespace MissionPlanner.GCSViews
             if (!Directory.Exists(sitldirectory))
                 Directory.CreateDirectory(sitldirectory);
 
+            // Populate the version selection box
+            var versionSelect = new Dictionary<string, APFirmware.RELEASE_TYPES?>()
+            {
+                { "Latest (Dev)", APFirmware.RELEASE_TYPES.DEV },
+                { "Beta", APFirmware.RELEASE_TYPES.BETA },
+                { "Stable", APFirmware.RELEASE_TYPES.OFFICIAL },
+                { "Skip Download", null }
+            };
+            cmb_version.DataSource = new BindingSource(versionSelect, null);
+            cmb_version.DisplayMember = "Key";
+            cmb_version.ValueMember = "Value";
+            cmb_version.SelectedIndex = Settings.Instance.GetInt32("sitl_download_version");
         }
 
         public void Activate()
@@ -255,6 +268,9 @@ namespace MissionPlanner.GCSViews
         /// <returns></returns>
         private async Task<string> CheckandGetSITLImage(string filename)
         {
+            // Save the selected version for next time
+            Settings.Instance["sitl_download_version"] = cmb_version.SelectedIndex.ToString();
+            var release_type = cmb_version.SelectedValue as APFirmware.RELEASE_TYPES?;
             if (BundledPath != "")
             {
                 filename = filename.Replace(".elf", "");
@@ -266,11 +282,13 @@ namespace MissionPlanner.GCSViews
                     foreach (var template in checks)
                     {
                         file = String.Format(template, filename);
+                        log.Info("try path " + BundledPath + System.IO.Path.DirectorySeparatorChar + file);
                         if (File.Exists(BundledPath + System.IO.Path.DirectorySeparatorChar + file))
                         {
                             return BundledPath + System.IO.Path.DirectorySeparatorChar + file;
                         }
                         file = file.ToLower();
+                        log.Info("try path " + BundledPath + System.IO.Path.DirectorySeparatorChar + file);
                         if (File.Exists(BundledPath + System.IO.Path.DirectorySeparatorChar + file))
                         {
                             return BundledPath + System.IO.Path.DirectorySeparatorChar + file;
@@ -294,12 +312,12 @@ namespace MissionPlanner.GCSViews
                 if (filename.ToLower().Contains("heli"))
                     type = APFirmware.MAV_TYPE.HELICOPTER;
 
-                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid = "" }, APFirmware.RELEASE_TYPES.OFFICIAL, type);
+                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid = "" }, release_type, type);
                 fw = fw.Where(a => a.Platform == "SITL_x86_64_linux_gnu").ToList();
                 if (fw.Count > 0)
                 {
                     var path = sitldirectory + Path.GetFileNameWithoutExtension(filename);
-                    if (!chk_skipdownload.Checked)
+                    if (release_type.HasValue)
                     {
                         Download.getFilefromNet(fw.First().Url.AbsoluteUri, path);
                         try
@@ -332,12 +350,12 @@ namespace MissionPlanner.GCSViews
                 if (filename.ToLower().Contains("heli"))
                     type = APFirmware.MAV_TYPE.HELICOPTER;
 
-                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid="" }, APFirmware.RELEASE_TYPES.OFFICIAL, type);
+                var fw = APFirmware.GetOptions(new DeviceInfo() { board = "", hardwareid="" }, release_type, type);
                 fw = fw.Where(a => a.Platform == "SITL_arm_linux_gnueabihf").ToList();
                 if (fw.Count > 0)
                 {
                     var path = sitldirectory + Path.GetFileNameWithoutExtension(filename);
-                    if (!chk_skipdownload.Checked)
+                    if (release_type.HasValue)
                     {
                         Download.getFilefromNet(fw.First().Url.AbsoluteUri, path);
                         try {
@@ -356,7 +374,7 @@ namespace MissionPlanner.GCSViews
                 }
             }
 
-            if (!chk_skipdownload.Checked)
+            if (release_type.HasValue)
             {
                 // kill old session - so we can overwrite if needed
                 try
@@ -375,13 +393,16 @@ namespace MissionPlanner.GCSViews
                 }
 
                 var url = sitlmasterurl;
-                var result = CustomMessageBox.Show("Select the version you want to use?", "Select your version", CustomMessageBox.MessageBoxButtons.YesNo, CustomMessageBox.MessageBoxIcon.Question, "Latest(Dev)", "Stable");
 
-                if(result == CustomMessageBox.DialogResult.Yes)
+                if (release_type == APFirmware.RELEASE_TYPES.DEV)
                 {
                     // master by default
                 }
-                else if (result == CustomMessageBox.DialogResult.No)
+                else if (release_type == APFirmware.RELEASE_TYPES.BETA)
+                {
+                    url = sitlbetaurl;
+                }
+                else if (release_type == APFirmware.RELEASE_TYPES.OFFICIAL)
                 {
                     if (filename.ToLower().Contains("copter"))
                         url = sitlcopterstableurl;
@@ -405,8 +426,10 @@ namespace MissionPlanner.GCSViews
 
                 load.Refresh();
 
-                var files = new string[] { "cygatomic-1.dll",
+                var files = new string[] { 
+                    "cygatomic-1.dll",
                     "cyggcc_s-1.dll",
+                    "cyggcc_s-seh-1.dll",
                     "cyggomp-1.dll",
                     "cygquadmath-0.dll",
                     "cygssp-0.dll",
@@ -636,7 +659,7 @@ namespace MissionPlanner.GCSViews
 
             ProcessStartInfo exestart = new ProcessStartInfo();
             exestart.FileName = exepath;
-            exestart.Arguments = String.Format("-M{0} -O{1} -s{2} --uartA tcp:0 {3}", model, homelocation, speedup, extraargs);
+            exestart.Arguments = String.Format("-M{0} -O{1} -s{2} --serial0 tcp:0 {3}", model, homelocation, speedup, extraargs);
             exestart.WorkingDirectory = simdir;
             exestart.WindowStyle = ProcessWindowStyle.Minimized;
             Console.WriteLine("sitl: {0} {1} {2}", exestart.WorkingDirectory, exestart.FileName,
@@ -687,7 +710,10 @@ namespace MissionPlanner.GCSViews
 
             await Task.Delay(2000);
 
-            MainV2.View.ShowScreen(MainV2.View.screens[0].Name);
+            MainV2.instance.InvokeIfRequired(() =>
+            {
+                MainV2.View.ShowScreen(MainV2.View.screens[0].Name);
+            });
 
             var client = new Comms.TcpSerial();
 
@@ -844,7 +870,7 @@ namespace MissionPlanner.GCSViews
 
             for (int a = (int)max; a >= 0; a--)
             {
-                var extra = " --disable-fgview -r50 ";
+                var extra = " ";
 
                 if (!string.IsNullOrEmpty(config))
                     extra += @" --defaults """ + config + @",identity.parm"" -P SERIAL0_PROTOCOL=2 -P SERIAL1_PROTOCOL=2 ";
@@ -854,14 +880,14 @@ namespace MissionPlanner.GCSViews
                 if (max == a)
                 {
                     extra += String.Format(
-                        " -M{4} -s1 --home {3} --instance {0} --uartA tcp:0 {1} -P SYSID_THISMAV={2} ",
+			" -M{4} -s1 --home {3} --instance {0} --serial0 tcp:0 {1} -P SYSID_THISMAV={2} ",
                         a, "", a + 1, BuildHomeLocation(home, (int)NUM_heading.Value), model);
                 }
                 else
                 {
                     extra += String.Format(
-                        " -M{4} -s1 --home {3} --instance {0} --uartA tcp:0 {1} -P SYSID_THISMAV={2} ",
-                        a, "" /*"--uartD tcpclient:127.0.0.1:" + (5770 + 10 * a)*/, a + 1,
+			" -M{4} -s1 --home {3} --instance {0} --serial0 tcp:0 {1} -P SYSID_THISMAV={2} ",
+			a, "" /*"--serial2 tcpclient:127.0.0.1:" + (5770 + 10 * a)*/, a + 1,
                         BuildHomeLocation(home, (int)NUM_heading.Value), model);
                 }
 
@@ -894,6 +920,9 @@ SIM_DRIFT_TIME=0
                 exestart.WindowStyle = ProcessWindowStyle.Minimized;
                 exestart.UseShellExecute = true;
 
+                log.InfoFormat("sitl: {0} {1} {2}", exestart.WorkingDirectory, exestart.FileName,
+                                       exestart.Arguments);
+
                 simulator.Add(System.Diagnostics.Process.Start(exestart));
 
                 await Task.Delay(100);
@@ -905,14 +934,21 @@ SIM_DRIFT_TIME=0
 
             try
             {
-                Parallel.For(0, max+1, (a) =>
-                    //for (int a = (int)max; a >= 0; a--)
+                Parallel.For(0, max + 1, (a) =>
+                //for (int a = (int)max; a >= 0; a--)
                 {
                     var mav = new MAVLinkInterface();
 
                     var client = new Comms.TcpSerial();
+                    try
+                    {
 
-                    client.client = new TcpClient("127.0.0.1", 5760 + (10 * (a)));
+                        client.client = new TcpClient("127.0.0.1", 5760 + (10 * (a)));
+                    }
+                    catch (Exception ex)
+                    {
+                        return;
+                    }
 
                     mav.BaseStream = client;
 
@@ -920,18 +956,21 @@ SIM_DRIFT_TIME=0
 
                     Thread.Sleep(200);
 
-                    this.InvokeIfRequired(() => { MainV2.instance.doConnect(mav, "preset", "5760", false); });
-
-                    lock(this)
-                        MainV2.Comports.Add(mav);
-
-                    try
+                    this.BeginInvokeIfRequired(() =>
                     {
-                        _ =  mav.getParamListMavftpAsync((byte) mav.sysidcurrent, (byte) mav.compidcurrent);
-                    }
-                    catch
-                    {
-                    }
+                        MainV2.instance.doConnect(mav, "preset", "5760", false);
+
+                        lock (this)
+                            MainV2.Comports.Add(mav);
+
+                        try
+                        {
+                            _ = mav.getParamListMavftpAsync((byte)mav.sysidcurrent, (byte)mav.compidcurrent);
+                        }
+                        catch
+                        {
+                        }
+                    });
                 }
                 );
 
@@ -977,7 +1016,7 @@ SIM_DRIFT_TIME=0
 
             for (int a = (int)max; a >= 0; a--)
             {
-                var extra = " --disable-fgview -r50";
+                var extra = " ";
 
                 if (!string.IsNullOrEmpty(config))
                     extra += @" --defaults """ + config + @",identity.parm"" -P SERIAL0_PROTOCOL=2 -P SERIAL1_PROTOCOL=2 ";
@@ -987,14 +1026,14 @@ SIM_DRIFT_TIME=0
                 if (max == a)
                 {
                     extra += String.Format(
-                        " -M{4} -s1 --home {3} --instance {0} --uartA tcp:0 {1} -P SYSID_THISMAV={2} ",
+			" -M{4} -s1 --home {3} --instance {0} --serial0 tcp:0 {1} -P SYSID_THISMAV={2} ",
                         a, "", a + 1, BuildHomeLocation(home, (int)NUM_heading.Value), model);
                 }
                 else
                 {
                     extra += String.Format(
-                        " -M{4} -s1 --home {3} --instance {0} --uartA tcp:0 {1} -P SYSID_THISMAV={2} ",
-                        a, "--uartD tcpclient:127.0.0.1:" + (5772 + 10 * a), a + 1,
+			" -M{4} -s1 --home {3} --instance {0} --serial0 tcp:0 {1} -P SYSID_THISMAV={2} ",
+			a, "--serial2 tcpclient:127.0.0.1:" + (5772 + 10 * a), a + 1,
                         BuildHomeLocation(home, (int)NUM_heading.Value), model);
                 }
 
@@ -1054,15 +1093,17 @@ SIM_DRIFT_TIME=0
 
                 Thread.Sleep(200);
 
-                this.InvokeIfRequired(() => { MainV2.instance.doConnect(MainV2.comPort, "preset", "5760", false); });
-
-                try
+                this.BeginInvokeIfRequired(() =>
                 {
-                    _ = MainV2.comPort.getParamListMavftpAsync((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent);
-                }
-                catch
-                {
-                }
+                    MainV2.instance.doConnect(MainV2.comPort, "preset", "5760", false);
+                    try
+                    {
+                        _ = MainV2.comPort.getParamListMavftpAsync((byte)MainV2.comPort.sysidcurrent, (byte)MainV2.comPort.compidcurrent);
+                    }
+                    catch
+                    {
+                    }
+                });
 
                 return;
             }

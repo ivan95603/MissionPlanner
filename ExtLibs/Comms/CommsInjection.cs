@@ -15,11 +15,21 @@ namespace MissionPlanner.Comms
     {
         private readonly CircularBuffer<byte> _bufferRX = new CircularBuffer<byte>(1024 * 100);
 
+        public CommsInjection()
+        {
+            BaseStream = new CommsStream(this, 0);
+            Open();
+        }
         public void AppendBuffer(byte[] indata)
         {
-            foreach (var b in indata)
+            lock (_bufferRX)
             {
-                _bufferRX.Add(b);
+                foreach (var b in indata)
+                {
+                    _bufferRX.Add(b);
+                }
+
+                BaseStream.SetLength(BaseStream.Length + indata.Length);
             }
         }
 
@@ -28,34 +38,45 @@ namespace MissionPlanner.Comms
 
         public void Close()
         {
-            _bufferRX.Clear();
+            lock (_bufferRX)
+                _bufferRX.Clear();
+            IsOpen = false;
         }
 
         public void DiscardInBuffer()
         {
-            _bufferRX.Clear();
+            lock (_bufferRX)
+                _bufferRX.Clear();
         }
 
         public void Open()
         {
-            _bufferRX.Clear();
+            lock (_bufferRX)
+                _bufferRX.Clear();
+            IsOpen = true;
         }
 
         public int Read(byte[] buffer, int offset, int count)
         {
+            if (!IsOpen)
+                throw new IOException("CommsInjection not open");
+
             var counttimeout = 0;
             while (BytesToRead == 0)
             {
                 Thread.Sleep(1);
                 if (counttimeout > ReadTimeout)
-                    throw new Exception("CommsInjection Timeout on read");
+                    throw new TimeoutException("CommsInjection Timeout on read");
                 counttimeout++;
             }
 
-            var read = Math.Min(count, _bufferRX.Length());
-            for (var i = 0; i < read; i++) buffer[offset + i] = _bufferRX.Read();
+            lock (_bufferRX)
+            {
+                var read = Math.Min(count, _bufferRX.Length());
+                for (var i = 0; i < read; i++) buffer[offset + i] = _bufferRX.Read();
 
-            return read;
+                return read;
+            }
         }
 
         public int ReadByte()
@@ -150,7 +171,8 @@ namespace MissionPlanner.Comms
             get
             {
                 ReadBufferUpdate?.Invoke(this, 0);
-                return _bufferRX.Length();
+                lock (_bufferRX)
+                    return _bufferRX.Length();
             }
         }
 
@@ -158,11 +180,11 @@ namespace MissionPlanner.Comms
         public int DataBits { get; set; }
         public bool DtrEnable { get; set; }
 
-        public bool IsOpen => true;
+        public bool IsOpen { get; private set; } = false;
 
         public string PortName { get; set; }
         public int ReadBufferSize { get; set; }
-        public int ReadTimeout { get; set; }
+        public int ReadTimeout { get; set; } = 50;
         public bool RtsEnable { get; set; }
 
         public int WriteBufferSize { get; set; }

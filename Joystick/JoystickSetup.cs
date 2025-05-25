@@ -77,7 +77,7 @@ namespace MissionPlanner.Joystick
                 var ax = new JoystickAxis()
                 {
                     ChannelNo = a,
-                    Label = "Ch " + a,
+                    Label = "RC " + a,
                     AxisArray = (Enum.GetValues(typeof(joystickaxis))),
                     ChannelValue = config.axis.ToString(),
                     ExpoValue = config.expo.ToString(),
@@ -94,6 +94,13 @@ namespace MissionPlanner.Joystick
                 {
                     return (short)MainV2.comPort.MAV.cs.GetType().GetField("rcoverridech" + ax.ChannelNo)
                         .GetValue(MainV2.comPort.MAV.cs);
+                };
+                ax.Expo = () =>
+                {
+                    if (int.TryParse(ax.ExpoValue, out int expoValue))
+                    {
+                        MainV2.joystick?.setExpo(ax.ChannelNo, expoValue);
+                    }
                 };
 
                 Controls.Add(ax);

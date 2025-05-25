@@ -29,32 +29,33 @@ namespace MissionPlanner.Controls
         {
             _mav = mav;
             _mavftp = new MAVFtp(_mav, (byte)_mav.sysidcurrent, (byte)mav.compidcurrent);
+            DateTime nextupdate = DateTime.UtcNow;
             _mavftp.Progress += (message, percent) =>
             {
                 try
                 {
-                    if (toolStripProgressBar1.Value == percent)
-                        return;
-
                     if (this.IsDisposed)
                     {
                         _mavftp = null;
                         return;
                     }
 
-                    this.BeginInvokeIfRequired(() =>
-                    {
-                        try
+                    if (nextupdate < DateTime.UtcNow)
+                        this.BeginInvokeIfRequired(() =>
                         {
-                            toolStripProgressBar1.Value = percent;
-                            toolStripStatusLabel1.Text = message;
-                            statusStrip1.Refresh();
-                        }
-                        catch (Exception ex)
-                        {
-                            log.Error(ex);
-                        }
-                    });
+                            try
+                            {
+                                nextupdate = DateTime.UtcNow.AddMilliseconds(100);
+                                if (percent >= 0)
+                                    toolStripProgressBar1.Value = percent;
+                                toolStripStatusLabel1.Text = message;
+                                statusStrip1.Refresh();
+                            }
+                            catch (Exception ex)
+                            {
+                                log.Error(ex);
+                            }
+                        });
                 }
                 catch (Exception ex)
                 {
@@ -173,7 +174,7 @@ namespace MissionPlanner.Controls
                 subItems = new ListViewItem.ListViewSubItem[]
                 {
                     new ListViewItem.ListViewSubItem(item, "File"),
-                    new ListViewItem.ListViewSubItem(item, file.Size.ToString())
+                    new ListViewItem.ListViewSubItem(item, file.Size.ToSizeUnits())
                 };
                 item.Tag = nodeDirInfo;
                 item.SubItems.AddRange(subItems);
@@ -305,14 +306,13 @@ namespace MissionPlanner.Controls
 
         private async void DownloadToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            toolStripStatusLabel1.Text = "Download ";
+            var sfd = new FolderBrowserDialog();
+            sfd.SelectedPath = Settings.GetUserDataDirectory();
+            var dr = sfd.ShowDialog();
             foreach (ListViewItem listView1SelectedItem in listView1.SelectedItems)
             {
                 toolStripStatusLabel1.Text = "Download " + listView1SelectedItem.Text;
-                SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = listView1SelectedItem.Text;
-                sfd.RestoreDirectory = true;
-                sfd.OverwritePrompt = true;
-                var dr = sfd.ShowDialog();
                 if (dr == DialogResult.OK)
                 {
                     var path = treeView1.SelectedNode.FullPath + "/" + listView1SelectedItem.Text;
@@ -341,7 +341,13 @@ namespace MissionPlanner.Controls
                             return;
                         }
 
-                        File.WriteAllBytes(sfd.FileName, ms.ToArray());
+                        var file = Path.Combine(sfd.SelectedPath, listView1SelectedItem.Text);
+                        int a = 0;
+                        while (File.Exists(file))
+                        {
+                            file = Path.Combine(sfd.SelectedPath, listView1SelectedItem.Text) + a++;
+                        }
+                        File.WriteAllBytes(file, ms.ToArray());
                     };
                     prd.RunBackgroundOperationAsync();
                     _mavftp.Progress -= progress;
@@ -583,16 +589,15 @@ namespace MissionPlanner.Controls
 
         private void DownloadBurstToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            toolStripStatusLabel1.Text = "Download ";
+            var sfd = new FolderBrowserDialog();
+            sfd.SelectedPath = Settings.GetUserDataDirectory();
+            var dr = sfd.ShowDialog();
             foreach (ListViewItem listView1SelectedItem in listView1.SelectedItems)
             {
-                toolStripStatusLabel1.Text = "Download " + listView1SelectedItem.Text;
-                SaveFileDialog sfd = new SaveFileDialog();
-                sfd.FileName = listView1SelectedItem.Text;
-                sfd.RestoreDirectory = true;
-                sfd.OverwritePrompt = true;
-                var dr = sfd.ShowDialog();
                 if (dr == DialogResult.OK)
                 {
+                    toolStripStatusLabel1.Text = "Download " + listView1SelectedItem.Text;
                     var path = treeView1.SelectedNode.FullPath + "/" + listView1SelectedItem.Text;
                     ProgressReporterDialogue prd = new ProgressReporterDialogue();
                     CancellationTokenSource cancel = new CancellationTokenSource();
@@ -620,7 +625,13 @@ namespace MissionPlanner.Controls
                             return;
                         }
 
-                        File.WriteAllBytes(sfd.FileName, ms.ToArray());
+                        var file = Path.Combine(sfd.SelectedPath, listView1SelectedItem.Text);
+                        int a = 0;
+                        while (File.Exists(file))
+                        {
+                            file = Path.Combine(sfd.SelectedPath, listView1SelectedItem.Text) + a++;
+                        }
+                        File.WriteAllBytes(file, ms.ToArray());
                     };
                     prd.RunBackgroundOperationAsync();
                     _mavftp.Progress -= progress;

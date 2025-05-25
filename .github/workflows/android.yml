@@ -19,6 +19,18 @@ jobs:
           submodules: true
           fetch-depth: 10
 
+      - name: Cache multiple paths
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/obj/**
+            !**.apk
+            !**.so
+            !**.aab
+            !**.dll
+            !jl
+          key: ${{ runner.os }}-buildAAB
+
       - name: Build
         shell: pwsh
         run: |
@@ -35,6 +47,8 @@ jobs:
           $manifest.SelectNodes("manifest") | % { $_.versionName = ""+$days }
           
           $manifest.Save($current.Path + "\ExtLibs\Xamarin\Xamarin.Android\Properties\AndroidManifest.xml")
+
+          choco install microsoft-openjdk --version=11.0.11.9
 
           msbuild -v:m -restore -t:SignAndroidPackage -p:Configuration=Release "ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj"
           
@@ -55,7 +69,7 @@ jobs:
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: com.michaeloborne.MissionPlanner.aab.zip
           path: ExtLibs\Xamarin\Xamarin.Android\bin\Release\*.aab
@@ -63,6 +77,7 @@ jobs:
       - name: Upload Android Release to Play Store
         if: ${{ github.event_name == 'push' }}
         uses: r0adkll/upload-google-play@v1.0.11
+        continue-on-error: true
         with:
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           packageName: com.michaeloborne.MissionPlanner
@@ -70,6 +85,28 @@ jobs:
           track: internal
           whatsNewDirectory: whatsnew
 
+
+  buildAPK:
+    name: Build Release APK
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 10
+
+      - name: Cache multiple paths
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/obj/**
+            !**.apk
+            !**.so
+            !**.aab
+            !**.dll
+            !jl
+          key: ${{ runner.os }}-buildAPK
       - name: Build
         shell: pwsh
         run: |
@@ -90,14 +127,39 @@ jobs:
           Set-Content -Path ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj -Value (Get-Content -Path ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj -Raw).Replace("<AndroidPackageFormat>aab</AndroidPackageFormat>","<AndroidPackageFormat>apk</AndroidPackageFormat>")
 
           Set-Content -Path ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj -Value (Get-Content -Path ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj -Raw).Replace("<AotAssemblies>true</AotAssemblies>","<AotAssemblies>false</AotAssemblies>")
+
+          choco install microsoft-openjdk --version=11.0.11.9
           
           msbuild -v:m -restore -t:SignAndroidPackage -p:Configuration=Release "ExtLibs\Xamarin\Xamarin.Android\Xamarin.Android.csproj"
           
+          del ExtLibs\Xamarin\Xamarin.Android\bin\Release\*-Signed.apk
+          
+          $apks = Get-ChildItem -include *.apk -path ExtLibs\Xamarin\Xamarin.Android\bin\Release\ -Recurse
+          
+          ForEach($i in $apks) {
+            echo $i.FullName
+            Move-Item -path $i.FullName temp.apk
+            C:\Android\android-sdk\build-tools\31.0.0\zipalign.exe -p -f -v 4 temp.apk $i.FullName
+            Remove-Item temp.apk
+          }
 
-      - uses: actions/upload-artifact@v2
+      - name: Sign APK
+        if: ${{ github.event_name == 'push' }}
+        id: sign2
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: ExtLibs\Xamarin\Xamarin.Android\bin\Release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "31.0.0"
+
+      - uses: actions/upload-artifact@v4
         with:
           name: com.michaeloborne.MissionPlanner.apk.zip
-          path: ExtLibs\Xamarin\Xamarin.Android\bin\Release\*-Signed.apk
+          path: ExtLibs\Xamarin\Xamarin.Android\bin\Release/${{ github.event_name == 'push' && '*-signed.apk' || '*.apk' }}
           
       - uses: "marvinpinto/action-automatic-releases@v1.2.1"
         if: ${{ github.event_name == 'push' }}
@@ -106,5 +168,5 @@ jobs:
           automatic_release_tag: "latest"
           prerelease: true
           title: "Android Development Build"
-          files: '**/*-Signed.apk'
+          files: '**/*-signed.apk'
 

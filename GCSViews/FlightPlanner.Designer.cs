@@ -78,6 +78,7 @@ namespace MissionPlanner.GCSViews
             this.coords1 = new MissionPlanner.Controls.Coords();
             this.lbl_status = new System.Windows.Forms.Label();
             this.panelWaypoints = new System.Windows.Forms.Panel();
+            this.chk_usemavftp = new System.Windows.Forms.CheckBox();
             this.but_mincommands = new MissionPlanner.Controls.MyButton();
             this.CMB_altmode = new System.Windows.Forms.ComboBox();
             this.CHK_splinedefault = new System.Windows.Forms.CheckBox();
@@ -111,6 +112,8 @@ namespace MissionPlanner.GCSViews
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.panel4 = new System.Windows.Forms.Panel();
             this.panel3 = new System.Windows.Forms.Panel();
+            this.progressBarInjectCustomMap = new System.Windows.Forms.ProgressBar();
+            this.BUT_InjectCustomMap = new MissionPlanner.Controls.MyButton();
             this.chk_grid = new System.Windows.Forms.CheckBox();
             this.comboBoxMapType = new System.Windows.Forms.ComboBox();
             this.lnk_kml = new System.Windows.Forms.LinkLabel();
@@ -122,7 +125,8 @@ namespace MissionPlanner.GCSViews
             this.panelMap = new System.Windows.Forms.Panel();
             this.lbl_homedist = new System.Windows.Forms.Label();
             this.lbl_prevdist = new System.Windows.Forms.Label();
-            this.trackBar1 = new MissionPlanner.Controls.MyTrackBar();
+            this.Zoomlevel = new System.Windows.Forms.NumericUpDown();
+            this.TRK_zoom = new MissionPlanner.Controls.MyTrackBar();
             this.label11 = new System.Windows.Forms.Label();
             this.lbl_distance = new System.Windows.Forms.Label();
             this.cmb_missiontype = new System.Windows.Forms.ComboBox();
@@ -152,6 +156,7 @@ namespace MissionPlanner.GCSViews
             this.loadPolygonToolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
             this.fromSHPToolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
             this.fromCurrentWaypointsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.offsetPolygonToolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
             this.areaToolStripMenuItem2 = new System.Windows.Forms.ToolStripMenuItem();
             this.geoFenceToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.GeoFenceuploadToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -211,6 +216,7 @@ namespace MissionPlanner.GCSViews
             this.timer1 = new System.Windows.Forms.Timer(this.components);
             this.contextMenuStripPoly = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.convertWPToPolygonToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.offsetPolygonToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.drawAPolygonToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem3 = new System.Windows.Forms.ToolStripMenuItem();
             this.testToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -218,6 +224,7 @@ namespace MissionPlanner.GCSViews
             this.zoomToVehicleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.zoomToMissionToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.zoomToHomeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.gDALOpacityToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.panel5.SuspendLayout();
             this.panel1.SuspendLayout();
             this.panelWaypoints.SuspendLayout();
@@ -228,7 +235,8 @@ namespace MissionPlanner.GCSViews
             this.panel3.SuspendLayout();
             this.panel2.SuspendLayout();
             this.panelMap.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBar1)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Zoomlevel)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.TRK_zoom)).BeginInit();
             this.contextMenuStrip1.SuspendLayout();
             this.panelBASE.SuspendLayout();
             this.contextMenuStripPoly.SuspendLayout();
@@ -290,6 +298,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.but_writewpfast, "but_writewpfast");
             this.but_writewpfast.Name = "but_writewpfast";
+            this.but_writewpfast.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.but_writewpfast.UseVisualStyleBackColor = true;
             this.but_writewpfast.Click += new System.EventHandler(this.but_writewpfast_Click);
             // 
@@ -297,6 +306,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.BUT_write, "BUT_write");
             this.BUT_write.Name = "BUT_write";
+            this.BUT_write.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.BUT_write.UseVisualStyleBackColor = true;
             this.BUT_write.Click += new System.EventHandler(this.BUT_write_Click);
             // 
@@ -304,6 +314,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.BUT_read, "BUT_read");
             this.BUT_read.Name = "BUT_read";
+            this.BUT_read.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.BUT_read.UseVisualStyleBackColor = true;
             this.BUT_read.Click += new System.EventHandler(this.BUT_read_Click);
             // 
@@ -402,6 +413,7 @@ namespace MissionPlanner.GCSViews
             // 
             // panelWaypoints
             // 
+            this.panelWaypoints.Controls.Add(this.chk_usemavftp);
             this.panelWaypoints.Controls.Add(this.but_mincommands);
             this.panelWaypoints.Controls.Add(this.CMB_altmode);
             this.panelWaypoints.Controls.Add(this.CHK_splinedefault);
@@ -420,17 +432,25 @@ namespace MissionPlanner.GCSViews
             this.panelWaypoints.ForeColor = System.Drawing.SystemColors.ControlText;
             this.panelWaypoints.Name = "panelWaypoints";
             // 
+            // chk_usemavftp
+            // 
+            resources.ApplyResources(this.chk_usemavftp, "chk_usemavftp");
+            this.chk_usemavftp.Name = "chk_usemavftp";
+            this.chk_usemavftp.UseVisualStyleBackColor = true;
+            this.chk_usemavftp.CheckedChanged += new System.EventHandler(this.chk_usemavftp_CheckedChanged);
+            // 
             // but_mincommands
             // 
             resources.ApplyResources(this.but_mincommands, "but_mincommands");
             this.but_mincommands.Name = "but_mincommands";
+            this.but_mincommands.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.but_mincommands.UseVisualStyleBackColor = true;
             this.but_mincommands.Click += new System.EventHandler(this.but_mincommands_Click);
             // 
             // CMB_altmode
             // 
-            resources.ApplyResources(this.CMB_altmode, "CMB_altmode");
             this.CMB_altmode.FormattingEnabled = true;
+            resources.ApplyResources(this.CMB_altmode, "CMB_altmode");
             this.CMB_altmode.Name = "CMB_altmode";
             this.CMB_altmode.SelectedIndexChanged += new System.EventHandler(this.CMB_altmode_SelectedIndexChanged);
             // 
@@ -486,7 +506,6 @@ namespace MissionPlanner.GCSViews
             this.AZ,
             this.TagData});
             this.Commands.Name = "Commands";
-            dataGridViewCellStyle7.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle7.BackColor = System.Drawing.SystemColors.Control;
             dataGridViewCellStyle7.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             dataGridViewCellStyle7.ForeColor = System.Drawing.SystemColors.WindowText;
@@ -643,6 +662,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.BUT_Add, "BUT_Add");
             this.BUT_Add.Name = "BUT_Add";
+            this.BUT_Add.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.toolTip1.SetToolTip(this.BUT_Add, resources.GetString("BUT_Add.ToolTip"));
             this.BUT_Add.UseVisualStyleBackColor = true;
             this.BUT_Add.Click += new System.EventHandler(this.BUT_Add_Click);
@@ -678,12 +698,28 @@ namespace MissionPlanner.GCSViews
             // 
             // panel3
             // 
+            this.panel3.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panel3.Controls.Add(this.progressBarInjectCustomMap);
+            this.panel3.Controls.Add(this.BUT_InjectCustomMap);
             this.panel3.Controls.Add(this.chk_grid);
             this.panel3.Controls.Add(this.lbl_status);
             this.panel3.Controls.Add(this.comboBoxMapType);
             this.panel3.Controls.Add(this.lnk_kml);
             resources.ApplyResources(this.panel3, "panel3");
             this.panel3.Name = "panel3";
+            // 
+            // progressBarInjectCustomMap
+            // 
+            resources.ApplyResources(this.progressBarInjectCustomMap, "progressBarInjectCustomMap");
+            this.progressBarInjectCustomMap.Name = "progressBarInjectCustomMap";
+            this.progressBarInjectCustomMap.Step = 1;
+            // 
+            // BUT_InjectCustomMap
+            // 
+            resources.ApplyResources(this.BUT_InjectCustomMap, "BUT_InjectCustomMap");
+            this.BUT_InjectCustomMap.Name = "BUT_InjectCustomMap";
+            this.BUT_InjectCustomMap.UseVisualStyleBackColor = true;
+            this.BUT_InjectCustomMap.Click += new System.EventHandler(this.BUT_InjectCustomMap_Click);
             // 
             // chk_grid
             // 
@@ -725,6 +761,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.BUT_loadwpfile, "BUT_loadwpfile");
             this.BUT_loadwpfile.Name = "BUT_loadwpfile";
+            this.BUT_loadwpfile.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.BUT_loadwpfile.UseVisualStyleBackColor = true;
             this.BUT_loadwpfile.Click += new System.EventHandler(this.BUT_loadwpfile_Click);
             // 
@@ -732,6 +769,7 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.BUT_saveWPFile, "BUT_saveWPFile");
             this.BUT_saveWPFile.Name = "BUT_saveWPFile";
+            this.BUT_saveWPFile.TextColorNotEnabled = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(87)))), ((int)(((byte)(4)))));
             this.BUT_saveWPFile.UseVisualStyleBackColor = true;
             this.BUT_saveWPFile.Click += new System.EventHandler(this.BUT_saveWPFile_Click);
             // 
@@ -745,7 +783,8 @@ namespace MissionPlanner.GCSViews
             // 
             this.panelMap.Controls.Add(this.lbl_homedist);
             this.panelMap.Controls.Add(this.lbl_prevdist);
-            this.panelMap.Controls.Add(this.trackBar1);
+            this.panelMap.Controls.Add(this.Zoomlevel);
+            this.panelMap.Controls.Add(this.TRK_zoom);
             this.panelMap.Controls.Add(this.label11);
             this.panelMap.Controls.Add(this.lbl_distance);
             this.panelMap.Controls.Add(this.cmb_missiontype);
@@ -765,18 +804,46 @@ namespace MissionPlanner.GCSViews
             resources.ApplyResources(this.lbl_prevdist, "lbl_prevdist");
             this.lbl_prevdist.Name = "lbl_prevdist";
             // 
-            // trackBar1
+            // Zoomlevel
             // 
-            resources.ApplyResources(this.trackBar1, "trackBar1");
-            this.trackBar1.LargeChange = 0.005F;
-            this.trackBar1.Maximum = 24F;
-            this.trackBar1.Minimum = 1F;
-            this.trackBar1.Name = "trackBar1";
-            this.trackBar1.SmallChange = 0.001F;
-            this.trackBar1.TickFrequency = 1F;
-            this.trackBar1.TickStyle = System.Windows.Forms.TickStyle.TopLeft;
-            this.trackBar1.Value = 2F;
-            this.trackBar1.Scroll += new System.EventHandler(this.trackBar1_Scroll);
+            resources.ApplyResources(this.Zoomlevel, "Zoomlevel");
+            this.Zoomlevel.DecimalPlaces = 1;
+            this.Zoomlevel.Increment = new decimal(new int[] {
+            5,
+            0,
+            0,
+            65536});
+            this.Zoomlevel.Maximum = new decimal(new int[] {
+            18,
+            0,
+            0,
+            0});
+            this.Zoomlevel.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.Zoomlevel.Name = "Zoomlevel";
+            this.toolTip1.SetToolTip(this.Zoomlevel, resources.GetString("Zoomlevel.ToolTip"));
+            this.Zoomlevel.Value = new decimal(new int[] {
+            2,
+            0,
+            0,
+            0});
+            this.Zoomlevel.ValueChanged += new System.EventHandler(this.Zoomlevel_ValueChanged);
+            // 
+            // TRK_zoom
+            // 
+            resources.ApplyResources(this.TRK_zoom, "TRK_zoom");
+            this.TRK_zoom.LargeChange = 0.005F;
+            this.TRK_zoom.Maximum = 24F;
+            this.TRK_zoom.Minimum = 1F;
+            this.TRK_zoom.Name = "TRK_zoom";
+            this.TRK_zoom.SmallChange = 0.001F;
+            this.TRK_zoom.TickFrequency = 1F;
+            this.TRK_zoom.TickStyle = System.Windows.Forms.TickStyle.TopLeft;
+            this.TRK_zoom.Value = 2F;
+            this.TRK_zoom.Scroll += new System.EventHandler(this.TRK_zoom_Scroll);
             // 
             // label11
             // 
@@ -976,6 +1043,7 @@ namespace MissionPlanner.GCSViews
             this.loadPolygonToolStripMenuItem2,
             this.fromSHPToolStripMenuItem2,
             this.fromCurrentWaypointsToolStripMenuItem,
+            this.offsetPolygonToolStripMenuItem2,
             this.areaToolStripMenuItem2});
             this.polygonToolStripMenuItem.Name = "polygonToolStripMenuItem";
             resources.ApplyResources(this.polygonToolStripMenuItem, "polygonToolStripMenuItem");
@@ -1015,6 +1083,12 @@ namespace MissionPlanner.GCSViews
             this.fromCurrentWaypointsToolStripMenuItem.Name = "fromCurrentWaypointsToolStripMenuItem";
             resources.ApplyResources(this.fromCurrentWaypointsToolStripMenuItem, "fromCurrentWaypointsToolStripMenuItem");
             this.fromCurrentWaypointsToolStripMenuItem.Click += new System.EventHandler(this.fromCurrentWaypointsMenuItem_Click);
+            // 
+            // offsetPolygonToolStripMenuItem2
+            // 
+            this.offsetPolygonToolStripMenuItem2.Name = "offsetPolygonToolStripMenuItem2";
+            resources.ApplyResources(this.offsetPolygonToolStripMenuItem2, "offsetPolygonToolStripMenuItem2");
+            this.offsetPolygonToolStripMenuItem2.Click += new System.EventHandler(this.offsetPolygonToolStripMenuItem_Click);
             // 
             // areaToolStripMenuItem2
             // 
@@ -1176,7 +1250,8 @@ namespace MissionPlanner.GCSViews
             this.prefetchWPPathToolStripMenuItem,
             this.kMLOverlayToolStripMenuItem,
             this.elevationGraphToolStripMenuItem,
-            this.reverseWPsToolStripMenuItem});
+            this.reverseWPsToolStripMenuItem,
+            this.gDALOpacityToolStripMenuItem});
             this.mapToolToolStripMenuItem.Name = "mapToolToolStripMenuItem";
             resources.ApplyResources(this.mapToolToolStripMenuItem, "mapToolToolStripMenuItem");
             // 
@@ -1398,6 +1473,7 @@ namespace MissionPlanner.GCSViews
             this.loadPolygonToolStripMenuItem,
             this.fromSHPToolStripMenuItem,
             this.convertWPToPolygonToolStripMenuItem,
+            this.offsetPolygonToolStripMenuItem,
             this.areaToolStripMenuItem,
             this.fenceInclusionToolStripMenuItem,
             this.fenceExclusionToolStripMenuItem});
@@ -1411,6 +1487,12 @@ namespace MissionPlanner.GCSViews
             this.convertWPToPolygonToolStripMenuItem.Name = "convertWPToPolygonToolStripMenuItem";
             resources.ApplyResources(this.convertWPToPolygonToolStripMenuItem, "convertWPToPolygonToolStripMenuItem");
             this.convertWPToPolygonToolStripMenuItem.Click += new System.EventHandler(this.fromCurrentWaypointsMenuItem_Click);
+            // 
+            // offsetPolygonToolStripMenuItem
+            // 
+            this.offsetPolygonToolStripMenuItem.Name = "offsetPolygonToolStripMenuItem";
+            resources.ApplyResources(this.offsetPolygonToolStripMenuItem, "offsetPolygonToolStripMenuItem");
+            this.offsetPolygonToolStripMenuItem.Click += new System.EventHandler(this.offsetPolygonToolStripMenuItem_Click);
             // 
             // drawAPolygonToolStripMenuItem
             // 
@@ -1454,6 +1536,12 @@ namespace MissionPlanner.GCSViews
             resources.ApplyResources(this.zoomToHomeToolStripMenuItem, "zoomToHomeToolStripMenuItem");
             this.zoomToHomeToolStripMenuItem.Click += new System.EventHandler(this.zoomToHomeToolStripMenuItem_Click);
             // 
+            // gDALOpacityToolStripMenuItem
+            // 
+            this.gDALOpacityToolStripMenuItem.Name = "gDALOpacityToolStripMenuItem";
+            resources.ApplyResources(this.gDALOpacityToolStripMenuItem, "gDALOpacityToolStripMenuItem");
+            this.gDALOpacityToolStripMenuItem.Click += new System.EventHandler(this.gDALOpacityToolStripMenuItem_Click);
+            // 
             // FlightPlanner
             // 
             this.BackColor = System.Drawing.SystemColors.Control;
@@ -1478,7 +1566,8 @@ namespace MissionPlanner.GCSViews
             this.panel2.PerformLayout();
             this.panelMap.ResumeLayout(false);
             this.panelMap.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBar1)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.Zoomlevel)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.TRK_zoom)).EndInit();
             this.contextMenuStrip1.ResumeLayout(false);
             this.panelBASE.ResumeLayout(false);
             this.contextMenuStripPoly.ResumeLayout(false);
@@ -1520,7 +1609,7 @@ namespace MissionPlanner.GCSViews
         public Label LBL_defalutalt;
         public Label label5;
         public Panel panelMap;
-        public MyTrackBar trackBar1;
+        public MyTrackBar TRK_zoom;
         public Label label11;
         public Label lbl_distance;
         public Label lbl_prevdist;
@@ -1631,6 +1720,11 @@ namespace MissionPlanner.GCSViews
         private ToolStripMenuItem zoomToVehicleToolStripMenuItem;
         private ToolStripMenuItem zoomToMissionToolStripMenuItem;
         private ToolStripMenuItem zoomToHomeToolStripMenuItem;
+        private ToolStripMenuItem convertWPToPolygonToolStripMenuItem;
+        private ToolStripMenuItem fromCurrentWaypointsToolStripMenuItem;
+        private ToolStripMenuItem offsetPolygonToolStripMenuItem;
+        private ToolStripMenuItem offsetPolygonToolStripMenuItem2;
+        public CheckBox chk_usemavftp;
         private DataGridViewComboBoxColumn Command;
         private DataGridViewTextBoxColumn Param1;
         private DataGridViewTextBoxColumn Param2;
@@ -1652,7 +1746,9 @@ namespace MissionPlanner.GCSViews
         private DataGridViewTextBoxColumn Dist;
         private DataGridViewTextBoxColumn AZ;
         private DataGridViewTextBoxColumn TagData;
-        private ToolStripMenuItem convertWPToPolygonToolStripMenuItem;
-        private ToolStripMenuItem fromCurrentWaypointsToolStripMenuItem;
+        private ToolStripMenuItem gDALOpacityToolStripMenuItem;
+        private MyButton BUT_InjectCustomMap;
+        private ProgressBar progressBarInjectCustomMap;
+        private NumericUpDown Zoomlevel;
     }
 }

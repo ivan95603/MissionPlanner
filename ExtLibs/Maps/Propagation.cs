@@ -77,7 +77,16 @@ namespace MissionPlanner.Maps
             get => Settings.Instance.GetBoolean("Propagation_Termap");
             set => Settings.Instance["Propagation_Termap"] = value.ToString();
         }
-
+        public static bool set_alt_min_max
+        {
+            get => Settings.Instance.GetBoolean("Propagation_Setalt");
+            set => Settings.Instance["Propagation_Setalt"] = value.ToString();
+        }
+        public static bool showScale
+        {
+            get => Settings.Instance.GetBoolean("Propagation_ShowScale");
+            set => Settings.Instance["Propagation_ShowScale"] = value.ToString();
+        }
         //thread run
         public bool ele_enabled { get; set; }
 
@@ -188,13 +197,22 @@ namespace MissionPlanner.Maps
 
                                 imageDataCenter = center;
                                 var tl = gMapControl1.FromLocalToLatLng(-extend / 2, -extend / 2);
-                                var rb = gMapControl1.FromLocalToLatLng(width + extend / 2,
-                                    height + extend / 2);
+                                // FromLocalToLatLng trims off anything out of bounds, this handles that
+                                var tloffset = gMapControl1.FromLatLngToLocal(tl);
+                                // get the trimmed rb
+                                var rb = gMapControl1.FromLocalToLatLng((int)tloffset.X + width + extend, (int)tloffset.Y + height + extend);
+                                // set the capture area
                                 imageDataRect = RectLatLng.FromLTRB(tl.Lng, tl.Lat, rb.Lng, rb.Lat);
 
                                 CancellationTokenSource cts = new CancellationTokenSource();
                                 ParallelOptions po = new ParallelOptions();
                                 po.CancellationToken = cts.Token;
+
+                                if (set_alt_min_max)
+                                {
+                                    min_alt = Settings.Instance.GetFloat("Propagation_Minalt");
+                                    max_alt = Settings.Instance.GetFloat("Propagation_Maxalt");
+                                }
 
                                 Parallel.ForEach(
                                     Extensions.SteppedRange(res / 2, height + extend + 1 - res, res), po, y =>
@@ -209,14 +227,15 @@ namespace MissionPlanner.Maps
                                         for (var x = res / 2; x < width + extend - res; x += res)
                                         {
                                             if (cts.IsCancellationRequested) return;
-                                            var lnglat = gMapControl1.FromLocalToLatLng(x - extend / 2, y - extend / 2);
+                                            // take into account our negative extent plus the current pixel
+                                            var lnglat = gMapControl1.FromLocalToLatLng((int)tloffset.X + x, (int)tloffset.Y + y);
                                             var altresponce = srtm.getAltitude(lnglat.Lat, lnglat.Lng, zoom);
                                             if (altresponce != srtm.altresponce.Invalid &&
                                                 altresponce != srtm.altresponce.Ocean && altresponce.alt != 0)
                                             {
                                                 alts[x, y] = altresponce.alt;
 
-                                                if (ter_run)
+                                                if (!set_alt_min_max && ter_run)
                                                 {
                                                     if (max_alt < altresponce.alt) max_alt = altresponce.alt;
 
@@ -283,12 +302,19 @@ namespace MissionPlanner.Maps
 
                             start2 = DateTime.Now;
 
+                            var tlfinal = gMapControl1.FromLatLngToLocal(imageDataRect.LocationTopLeft);
+                            var rbfinal = gMapControl1.FromLatLngToLocal(imageDataRect.LocationRightBottom);
+
                             var gMapMarkerElevation = new GMapMarkerElevation(imageData,
+                                (int)Math.Min(rbfinal.X - tlfinal.X, imageData.GetLength(0)), (int)Math.Min(rbfinal.Y - tlfinal.Y, imageData.GetLength(1)),
                                 new RectLatLng(imageDataRect.LocationTopLeft, imageDataRect.Size),
                                 new PointLatLngAlt(imageDataCenter));
 
                             if (!ele_enabled)
                                 return;
+
+                            if (ele_run) gMapMarkerElevation.setScale(showScale, 0, (int)Settings.Instance.GetFloat("Propagation_Clearance", 5),"Rel to Terrain");
+                            else if (ter_run) gMapMarkerElevation.setScale(showScale, (int)max_alt, (int)min_alt, "Elevation (AMSL)");
 
                             try
                             {
@@ -390,7 +416,7 @@ namespace MissionPlanner.Maps
             {
                 normvalue = (value - min_alt) / (max_alt - min_alt);
             }
-            
+
             if (normvalue < 0)
                 normvalue = 0;
 

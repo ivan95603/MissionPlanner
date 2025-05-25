@@ -13,6 +13,10 @@ using MissionPlanner.ArduPilot.Mavlink;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("MissionPlanner")]
+[assembly: InternalsVisibleTo("MissionPlannerLib")]
 
 namespace MissionPlanner
 {
@@ -99,7 +103,7 @@ namespace MissionPlanner
             this.SerialString = "";
             this.FrameString = "";
             if (sysid != 255 && !(compid == 0 && sysid == 0)) // && !parent.logreadmode)
-                this.Proximity = new Proximity(this);
+                this.Proximity = new Proximity(this, sysid, compid);
 
             camerapoints.Clear();
 
@@ -265,7 +269,7 @@ namespace MissionPlanner
         }
 
         /// <summary>
-        /// time seen of last mavlink packet
+        /// time seen of last mavlink packet UTC
         /// </summary>
         public DateTime lastvalidpacket { get; set; }
 
@@ -289,6 +293,8 @@ namespace MissionPlanner
         public MAV_TYPE aptype { get; set; }
 
         public MAV_AUTOPILOT apname { get; set; }
+
+        public bool isHighLatency { get; set; }
 
         public bool CANNode { get; set; } = false;
 
@@ -322,6 +328,10 @@ namespace MissionPlanner
         internal int recvpacketcount = 0;
         public Int64 time_offset_ns { get; set; }
         public CameraProtocol Camera { get; set; }
+        
+        [Obsolete("Use GimbalManager instead")]
+        public GimbalProtocol Gimbal { get; set; }
+        public GimbalManagerProtocol GimbalManager { get; set; }
 
         public override string ToString()
         {

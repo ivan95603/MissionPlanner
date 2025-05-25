@@ -21,6 +21,9 @@ namespace MissionPlanner.Utilities
         public static readonly PointLatLngAlt Zero = new PointLatLngAlt();
         public double Lat { get; set; } = 0;
         public double Lng { get; set; } = 0;
+        /// <summary>
+        /// Altitude in meters
+        /// </summary>
         public double Alt { get; set; } = 0;
         public string Tag { get; set; } = "";
         public string Tag2 { get; set; } = "";
@@ -204,6 +207,16 @@ namespace MissionPlanner.Utilities
         {
             int zone = GetUTMZone();
             return ((Math.Abs(zone) * 6) - 180);
+        }
+
+        public int GetLatStartUTM()
+        {
+            return (int) (Lat - (Lat % 8));
+        }
+
+        public int GetLatEndUTM()
+        {
+            return (int)(Lat - (Lat % 8)) - 8;
         }
 
         public string GetFriendlyZone()
@@ -394,6 +407,35 @@ namespace MissionPlanner.Utilities
             var d = R * c * 1000.0; // M
 
             return d;
+        }
+
+
+        /// <summary>
+        /// https://www.movable-type.co.uk/scripts/latlong.html
+        /// </summary>
+        /// <param name="p2"></param>
+        /// <param name="f">0-1</param>
+        /// <returns></returns>
+        public PointLatLngAlt GetGreatCirclePathPoint(PointLatLngAlt p2, double f)
+        {
+            var dLat = (p2.Lat - Lat) * MathHelper.deg2rad;
+            var dLon = (p2.Lng - Lng) * MathHelper.deg2rad;
+            var R = 6378100.0; // 6371 km
+            var angdist = this.GetDistance(p2) / R;
+
+            //φ = lat
+            //δ = d/R
+            //λ2 = lon
+
+            var a = Math.Sin((1-f) * angdist) / Math.Sin(angdist);
+            var b = Math.Sin(f * angdist) / Math.Sin(angdist);
+            var x = a * Math.Cos(Lat * MathHelper.deg2rad) * Math.Cos(Lng * MathHelper.deg2rad) + b * Math.Cos(p2.Lat * MathHelper.deg2rad) * Math.Cos(p2.Lng * MathHelper.deg2rad);
+            var y = a * Math.Cos(Lat * MathHelper.deg2rad) * Math.Sin(Lng * MathHelper.deg2rad) + b * Math.Cos(p2.Lat * MathHelper.deg2rad) * Math.Sin(p2.Lng * MathHelper.deg2rad);
+            var z = a * Math.Sin(Lat * MathHelper.deg2rad) + b * Math.Sin(p2.Lat * MathHelper.deg2rad);
+            var alat = Math.Atan2(z, Math.Sqrt(x * x + y * y));
+            var alon = Math.Atan2(y, x);
+
+            return new PointLatLngAlt(alat * MathHelper.rad2deg, alon * MathHelper.rad2deg);
         }
 
         public int CompareTo(object obj)
